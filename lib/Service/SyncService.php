@@ -15,6 +15,8 @@ use OCA\DeckGithubSync\Db\ItemMap;
 use OCA\DeckGithubSync\Db\ItemMapMapper;
 use OCA\DeckGithubSync\Db\UserMapMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IUserManager;
+use OCP\IUserSession;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -29,11 +31,24 @@ class SyncService {
 		private UserMapMapper $userMaps,
 		private DeckService $deck,
 		private GithubProjectService $github,
+		private IUserManager $userManager,
+		private IUserSession $userSession,
 		private LoggerInterface $logger,
 	) {
 	}
 
 	public function syncBoard(BoardMap $map): array {
+		$prevUid = $this->userSession->getUser()?->getUID();
+		try {
+			return $this->doSyncBoard($map);
+		} finally {
+			if ($this->userSession->getUser()?->getUID() !== $prevUid) {
+				$this->userSession->setUser($prevUid === null ? null : $this->userManager->get($prevUid));
+			}
+		}
+	}
+
+	private function doSyncBoard(BoardMap $map): array {
 		$userId = $map->getUserId();
 		$stats = ['deck_to_github' => 0, 'github_to_deck' => 0, 'errors' => []];
 		try {

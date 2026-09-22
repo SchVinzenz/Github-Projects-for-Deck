@@ -13,14 +13,14 @@
 * Deck board ↔ GitHub Project v2 (org/user)
 * Stack ↔ Status field option, Card ↔ DraftIssue/Issue
 * Title, description, labels, assignees, due date, comments
-* GitHub App (installation token) + optional user PAT
-* Webhook (projects_v2_item, issues) + background job fallback]]></description>
+* GitHub App (installation token), OAuth login or personal token
+* Webhook (projects_v2_item) + background job fallback]]></description>
 	<version>0.4.1</version>
 	<licence>agpl</licence>
 	<author>Nextcloud contributors</author>
 	<namespace>DeckGithubSync</namespace>
 	<category>integration</category>
-	<bugs>https://github.com/nextcloud/deckgithubsync/issues</bugs>
+	<bugs>https://github.com/SchVinzenz/Github-Projects-for-Deck/issues</bugs>
 	<dependencies>
 		<nextcloud min-version="30" max-version="36"/>
 	</dependencies>

@@ -52,6 +52,11 @@ class SettingsController extends Controller {
 			return new DataResponse(['error' => 'Invalid direction'], Http::STATUS_BAD_REQUEST);
 		}
 		try {
+			$this->deck->getStacks($this->userId ?? '', $deckBoardId);
+		} catch (\Throwable $e) {
+			return new DataResponse(['error' => 'Deck-Board nicht gefunden oder kein Zugriff.'], Http::STATUS_BAD_REQUEST);
+		}
+		try {
 			$projectId = $this->projects->resolveProjectId($this->userId ?? '', $githubOwner, $githubNumber)
 				?? $this->projects->resolveProjectId($this->userId ?? '', $githubOwner, $githubNumber, 'user');
 		} catch (\Throwable $e) {
@@ -91,6 +96,9 @@ class SettingsController extends Controller {
 			return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
 		}
 		if ($direction !== null) {
+			if (!in_array($direction, ['both', 'deck_to_github', 'github_to_deck'], true)) {
+				return new DataResponse(['error' => 'Invalid direction'], Http::STATUS_BAD_REQUEST);
+			}
 			$map->setDirection($direction);
 		}
 		if ($fieldConfig !== null) {

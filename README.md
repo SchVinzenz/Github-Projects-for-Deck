@@ -3,7 +3,17 @@
 Bidirektionale, pro Board und pro Feld konfigurierbare Synchronisation zwischen
 Nextcloud Deck und GitHub Projects v2.
 
-## Stand (0.3.1 – lauffähig)
+## Stand (0.4.1)
+
+- OAuth-Login per Klick (+ PAT-Fallback), Token-Status, Boards-Dropdown
+- Redesignte Admin-/Personal-Einstellungen (nativ, `.mjs`-Module)
+- Sync: beide Richtungen für Anlage + Update, Last-Write-Wins, getrennte
+  `deck_hash`/`github_hash` (idempotent, konvergiert), Titel-Dedup,
+  race-sichere Links, Session-Isolation für Cron
+- Webhook mit echten `deleted`/`archived`/`restored`-Events; keine
+  Löschungen auf Listen-Abwesenheit
+- Validierte API (Richtung, Board-Zugriff, Token), `occ`-Fehlercodes
+- Unit-Test `MappingTest`, Docs unter `docs/`
 
 - User-Mapping `deckghs_usermap` pro Board (`PUT /api/v1/mappings/{id}/users`), Sync nutzt es für Assignees beide Richtungen
 - Due-Date via konfigurierbarer `dateFieldId` (erstes DATE-Feld auto-erkannt, pro Mapping änderbar), `DeckService::normalizeDue`

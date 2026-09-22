@@ -33,6 +33,7 @@
 
 		<section class="deckghs-card">
 			<h2>Board-Mappings</h2>
+			<p v-if="!loading && !status.connected" class="deckghs-note deckghs-note-warn">Tipp: Verbinde zuerst oben dein GitHub-Konto – sonst schlägt das Anlegen fehl.</p>
 			<p v-if="!mappings.length" class="deckghs-muted">Noch keine Mappings. Lege unten dein erstes an.</p>
 			<article v-for="m in mappings" :key="m.id" class="deckghs-map">
 				<header>
@@ -238,6 +239,7 @@ export default {
 .deckghs-muted { color: var(--color-text-maxcontrast); font-size: 0.9em; }
 .deckghs-note { border-radius: var(--border-radius); padding: 8px 12px; }
 .deckghs-note-ok { background: var(--color-success-background, #e6f4ea); }
+.deckghs-note-warn { background: var(--color-warning-background, #fdf3e0); }
 .deckghs-note-err, .error { background: var(--color-error-background, #fdecea); color: var(--color-error-text, inherit); border-radius: var(--border-radius); padding: 8px 12px; }
 .deckghs-conn { display: flex; gap: 12px; align-items: flex-start; }
 .deckghs-dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }

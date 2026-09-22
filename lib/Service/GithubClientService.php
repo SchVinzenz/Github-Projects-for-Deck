@@ -205,7 +205,8 @@ class GithubClientService {
 	}
 
 	/** @return array{data?: array, errors?: array} */
-	public function graphql(string $userId, string $query, array $variables = []): array {		$client = $this->clientService->newClient();
+	public function graphql(string $userId, string $query, array $variables = []): array {
+		$client = $this->clientService->newClient();
 		$resp = $client->post(self::GRAPHQL_URL, [
 			'headers' => [
 				'Authorization' => 'Bearer ' . $this->resolveToken($userId),
