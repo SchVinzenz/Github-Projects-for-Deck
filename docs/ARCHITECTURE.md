@@ -11,12 +11,13 @@ Deck (Board/Stack/Card)  <--DeckService-->  SyncService  <--GithubProjectService
 |---|---|
 | `Service/DeckService` | Deck-2.x-API (`Board/Stack/Card/Label/AssignmentService`, `Card/LabelMapper`), User-Kontext via `setUserId` + Session |
 | `Service/GithubClientService` | Auth: GitHub-App-JWT → Installation-Token (1 h, gecacht), User-PAT/OAuth-Token; GraphQL- + REST-Calls, Token-Validierung |
-| `Service/GithubProjectService` | Projects-v2-Operationen: Project auflösen, Fields/Status-Optionen, Items (paginiert), Draft anlegen/updaten, Status/Datum setzen, archivieren/löschen; Issue-REST (Titel/Body/Labels/Assignees/Comments) |
-| `Service/SyncService` | Bidirektionaler Sync pro Mapping: Richtung pro Board + pro Feld, Last-Write-Wins via Zeitstempel, Hash-Loop-Schutz, Delete/Archive-Propagation, PRs read-only |
+| `Service/GithubProjectService` | Projects-v2-Operationen: Project auflösen/discover, Repositories, Fields/Status-Optionen (inkl. Anlegen), Items (paginiert), Draft anlegen/updaten/konvertieren, Status/Datum setzen, archivieren/löschen; Issue-REST (Titel/Body/Labels/Assignees/Comments) |
+| `Service/GithubClientService` | Auth: GitHub-App-JWT → Installation-Token, OAuth-Code/Refresh-Flow, Token-Validierung; GraphQL (fail-loud) + REST |
+| `Service/SyncService` | Bidirektionaler Sync pro Mapping: Richtung pro Board + pro Feld, Last-Write-Wins via Zeitstempel, getrennte Deck-/GitHub-Hashes, Titel-Dedup, PRs read-only |
 | `Controller/OAuthController` | GitHub-Login-Flow (state-gesichert, Token + Login werden pro Nutzer gespeichert) |
 | `Controller/SettingsController` | Mappings-CRUD, User-Mapping, Boards-Liste, Token-Status/Set/Unset, Admin-Config |
 | `Controller/SyncController` | Manueller Sync-Trigger + Status |
-| `Controller/WebhookController` | Öffentlicher GitHub-Webhook (HMAC, Bot-Filter, Routing per `project_node_id` → Mapping wird fällig gestellt) |
+| `Controller/WebhookController` | Öffentlicher GitHub-Webhook (HMAC, Bot-Filter, `deleted`/`archived`/`restored`-Events werden direkt angewendet, sonst Routing per `project_node_id` → Mapping wird fällig gestellt) |
 | `BackgroundJob/SyncJob` | Cron-Job (TimedJob, Intervall aus Config, min. 300 s) |
 | `Command/SyncCommand` | `occ deckgithubsync:sync [id]` |
 
@@ -24,7 +25,7 @@ Deck (Board/Stack/Card)  <--DeckService-->  SyncService  <--GithubProjectService
 
 - `deckghs_boardmap`: Board ↔ Project, Richtung, Feldconfig (JSON),
   `status_field_id`, `date_field_id`, `last_sync`
-- `deckghs_itemmap`: Card ↔ Project-Item, Content-Typ, Sync-Hash
+- `deckghs_itemmap`: Card ↔ Project-Item, Content-Typ, Deck-Hash + GitHub-Hash (getrennt, für idempotente Syncs)
 - `deckghs_usermap`: GitHub-Login ↔ Deck-Benutzer (pro Mapping, für Assignees)
 
 ## Sync-Regeln
@@ -34,7 +35,7 @@ Deck (Board/Stack/Card)  <--DeckService-->  SyncService  <--GithubProjectService
   `assignees`, `due`, `comments`, jeweils zusätzlich `off` möglich).
 - **Last-Write-Wins**: Bei beidseitig geänderten Items gewinnt die neuere
   Seite (`lastModified` vs. `updatedAt`).
-- **Loop-Schutz**: Sync-Hash über die gemappten Felder + Bot-Filter im Webhook.
+- **Loop-Schutz**: Getrennte Hashes über die gemappten Felder pro Seite + Bot-Filter im Webhook.
 - **Status**: Deck-Stack ↔ Status-Option (per **ID**, nicht Name).
 - **Fälligkeit**: Deck-`duedate` ↔ konfigurierbares Datumsfeld (`dateFieldId`,
   Default: erstes DATE-Feld).

@@ -100,7 +100,7 @@ class SyncReliabilityTest extends TestCase {
 		$github->method('ensureDateFields')->willReturn(['startDateFieldId' => 'S1', 'dateFieldId' => 'D1']);
 		$github->method('listItems')->willReturn(['items' => [], 'hasNext' => false, 'cursor' => null]);
 		$github->method('addDraft')->willReturn('I1');
-		$github->expects($this->once())->method('convertDraftToIssue')->with('alice', 'I1', 'org/repo')->willReturn([
+		$github->expects($this->once())->method('convertDraftToIssue')->with('alice', 'P1', 'I1', 'org/repo')->willReturn([
 			'id' => 'I1', 'content' => [
 				'__typename' => 'Issue', 'id' => 'ISSUE1', 'number' => 7,
 				'title' => 'A card', 'body' => 'Body', 'closed' => false,

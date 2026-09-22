@@ -37,6 +37,22 @@ class SyncService {
 	) {
 	}
 
+	/** Non-critical sync problems collected during a run (best-effort fields). */
+	private array $warnings = [];
+
+	/**
+	 * Run a best-effort sync step: failures are recorded as warnings and do
+	 * not abort the item sync (unlike title/status/date failures).
+	 */
+	private function bestEffort(callable $step, string $context): void {
+		try {
+			$step();
+		} catch (\Throwable $e) {
+			$this->warnings[] = $context . ': ' . $e->getMessage();
+			$this->logger->warning('deckgithubsync: ' . $context, ['exception' => $e]);
+		}
+	}
+
 	public function syncBoard(BoardMap $map): array {
 		$prevUid = $this->userSession->getUser()?->getUID();
 		try {
@@ -50,7 +66,8 @@ class SyncService {
 
 	private function doSyncBoard(BoardMap $map): array {
 		$userId = $map->getUserId();
-		$stats = ['deck_to_github' => 0, 'github_to_deck' => 0, 'errors' => []];
+		$stats = ['deck_to_github' => 0, 'github_to_deck' => 0, 'errors' => [], 'warnings' => []];
+		$this->warnings = [];
 		try {
 			$this->deck->assertAvailable();
 		} catch (\Throwable $e) {
@@ -94,9 +111,14 @@ class SyncService {
 				$dateFieldId = $fields['dateFieldId'];
 			}
 			if ($allowToGithub) {
-				$dateFields = $this->github->ensureDateFields($userId, $map->getGithubProjectId(), $startFieldId, $dateFieldId);
-				$startFieldId = $dateFields['startDateFieldId'];
-				$dateFieldId = $dateFields['dateFieldId'];
+				try {
+					$dateFields = $this->github->ensureDateFields($userId, $map->getGithubProjectId(), $startFieldId, $dateFieldId);
+					$startFieldId = $dateFields['startDateFieldId'];
+					$dateFieldId = $dateFields['dateFieldId'];
+				} catch (\Throwable $e) {
+					$this->warnings[] = 'Datum-Felder: ' . $e->getMessage();
+					$this->logger->warning('deckgithubsync: ensureDateFields failed', ['exception' => $e]);
+				}
 			}
 			if ($map->getStatusFieldId() === '' && $statusFieldId !== '') {
 				$map->setStatusFieldId($statusFieldId);
@@ -110,13 +132,24 @@ class SyncService {
 			$options = $fields['options']; // name => id
 			if ($statusFieldId !== '') {
 				if ($allowToGithub) {
-					$options = $this->github->ensureStatusOptions($userId, $statusFieldId, $fields['fields'] ?? [], array_values($stackById));
+					try {
+						$options = $this->github->ensureStatusOptions($userId, $statusFieldId, $fields['fields'] ?? [], array_values($stackById));
+					} catch (\Throwable $e) {
+						$this->warnings[] = 'Status-Optionen: ' . $e->getMessage();
+						$this->logger->warning('deckgithubsync: ensureStatusOptions failed', ['exception' => $e]);
+					}
 				}
 				if ($allowToDeck) {
 					foreach (array_keys($fields['options']) as $statusName) {
 						$key = strtolower($statusName);
 						if (!isset($stackByTitle[$key])) {
-							$id = $this->deck->createStack($userId, $map->getDeckBoardId(), $statusName, count($stacks) * 100);
+							try {
+								$id = $this->deck->createStack($userId, $map->getDeckBoardId(), $statusName, count($stacks) * 100);
+							} catch (\Throwable $e) {
+								$this->warnings[] = 'Stack anlegen: ' . $e->getMessage();
+								$this->logger->warning('deckgithubsync: createStack failed', ['exception' => $e]);
+								continue;
+							}
 							$stacks[] = ['id' => $id, 'title' => $statusName];
 							$stackByTitle[$key] = $id;
 							$stackById[$id] = $statusName;
@@ -124,10 +157,18 @@ class SyncService {
 					}
 				}
 			} elseif ($allowToGithub) {
-				throw new \RuntimeException('GitHub Project has no Status field');
+				$this->warnings[] = 'GitHub Project hat kein Status-Feld; Stack-Sync ist deaktiviert.';
+				$this->logger->warning('deckgithubsync: project has no Status field, stack sync disabled');
 			}
 			if ($stacks === [] && $allowToDeck) {
-				$id = $this->deck->createStack($userId, $map->getDeckBoardId(), 'Todo', 0);
+				try {
+					$id = $this->deck->createStack($userId, $map->getDeckBoardId(), 'Todo', 0);
+				} catch (\Throwable $e) {
+					$this->warnings[] = 'Stack anlegen: ' . $e->getMessage();
+					$this->logger->warning('deckgithubsync: createStack failed', ['exception' => $e]);
+					$stats['warnings'] = $this->warnings;
+					return $stats;
+				}
 				$stacks[] = ['id' => $id, 'title' => 'Todo'];
 				$stackByTitle['todo'] = $id;
 				$stackById[$id] = 'Todo';
@@ -202,7 +243,7 @@ class SyncService {
 							$existing->setSyncHash('pending_draft');
 							$this->itemMaps->update($existing);
 							$oldId = $gItem['id'];
-							$gItem = $this->github->convertDraftToIssue($userId, $oldId, $map->getGithubRepository());
+							$gItem = $this->github->convertDraftToIssue($userId, $map->getGithubProjectId(), $oldId, $map->getGithubRepository());
 							$skipGithubItems[$oldId] = true;
 							$skipGithubItems[$gItem['id']] = true;
 							$existing->setGithubItemId($gItem['id']);
@@ -260,7 +301,7 @@ class SyncService {
 						}
 						$known['deck:' . $card['id']] = $known['gh:' . $itemId] = $im;
 						if ($map->getGithubRepository() !== '') {
-							$issueItem = $this->github->convertDraftToIssue($userId, $itemId, $map->getGithubRepository());
+							$issueItem = $this->github->convertDraftToIssue($userId, $map->getGithubProjectId(), $itemId, $map->getGithubRepository());
 							$itemId = $issueItem['id'];
 							$im->setGithubItemId($itemId);
 							$im->setGithubContentId($issueItem['content']['id'] ?? '');
@@ -366,7 +407,7 @@ class SyncService {
 					}
 					if ($this->fieldAllowed($fieldMap, 'labels', BoardMap::DIR_TO_DECK)) {
 						$ghLabels = GithubProjectService::labelsOf($item);
-						$this->deck->syncLabels($userId, $map->getDeckBoardId(), $cardId, $ghLabels, !($content['labels']['pageInfo']['hasNextPage'] ?? false));
+						$this->bestEffort(fn () => $this->deck->syncLabels($userId, $map->getDeckBoardId(), $cardId, $ghLabels, !($content['labels']['pageInfo']['hasNextPage'] ?? false)), 'labels GitHub→Deck');
 					}
 					if ($this->fieldAllowed($fieldMap, 'assignees', BoardMap::DIR_TO_DECK) && $userMap !== []) {
 						$deckUids = [];
@@ -376,10 +417,10 @@ class SyncService {
 								$deckUids[] = $uid;
 							}
 						}
-						$this->deck->syncAssignees($userId, $cardId, $deckUids, ($content['assignees']['pageInfo']['hasNextPage'] ?? false) ? [] : array_values($userMap['gh2deck']));
+						$this->bestEffort(fn () => $this->deck->syncAssignees($userId, $cardId, $deckUids, ($content['assignees']['pageInfo']['hasNextPage'] ?? false) ? [] : array_values($userMap['gh2deck'])), 'assignees GitHub→Deck');
 					}
 					if ($this->fieldAllowed($fieldMap, 'comments', BoardMap::DIR_TO_DECK) && ($content['__typename'] ?? '') === 'Issue') {
-						$this->pullMissingComments($userId, $cardId, $item);
+						$this->bestEffort(fn () => $this->pullMissingComments($userId, $cardId, $item), 'comments GitHub→Deck');
 					}
 					$link = $this->linkItems($map->getId(), $cardId, $itemId, $item, $this->hashDeck([
 						'title' => $title, 'description' => $body, 'stackId' => $targetStack,
@@ -398,6 +439,7 @@ class SyncService {
 		if ($stats['errors'] === []) {
 			$map->setLastSync(time());
 		}
+		$stats['warnings'] = $this->warnings;
 		$this->boardMaps->update($map);
 		return $stats;
 	}
@@ -482,7 +524,7 @@ class SyncService {
 					}
 					$ghLabels = GithubProjectService::labelsOf($gItem);
 					if (array_diff($card['labels'] ?? [], $ghLabels) !== [] || array_diff($ghLabels, $card['labels'] ?? []) !== []) {
-						$this->github->setIssueLabels($userId, $repo, $number, $card['labels'] ?? []);
+						$this->bestEffort(fn () => $this->github->setIssueLabels($userId, $repo, $number, $card['labels'] ?? []), 'labels Deck→GitHub');
 					}
 				}
 				if ($this->fieldAllowed($fieldMap, 'assignees', BoardMap::DIR_TO_GITHUB) && $userMap !== []) {
@@ -498,11 +540,11 @@ class SyncService {
 						}
 					}
 					if (array_diff($wantLogins, $ghLogins) !== [] || array_diff($ghLogins, $wantLogins) !== []) {
-						$this->github->setIssueAssignees($userId, $repo, $number, array_values(array_unique($wantLogins)));
+						$this->bestEffort(fn () => $this->github->setIssueAssignees($userId, $repo, $number, array_values(array_unique($wantLogins))), 'assignees Deck→GitHub');
 					}
 				}
 				if ($this->fieldAllowed($fieldMap, 'comments', BoardMap::DIR_TO_GITHUB)) {
-					$this->pushMissingComments($userId, $card, $repo, $number);
+					$this->bestEffort(fn () => $this->pushMissingComments($userId, $card, $repo, $number), 'comments Deck→GitHub');
 				}
 			}
 		}
@@ -617,7 +659,7 @@ class SyncService {
 		}
 		if ($this->fieldAllowed($fieldMap, 'labels', BoardMap::DIR_TO_DECK)) {
 			$ghLabels = GithubProjectService::labelsOf($gItem);
-			$this->deck->syncLabels($userId, $map->getDeckBoardId(), (int)$card['id'], $ghLabels, !($content['labels']['pageInfo']['hasNextPage'] ?? false));
+			$this->bestEffort(fn () => $this->deck->syncLabels($userId, $map->getDeckBoardId(), (int)$card['id'], $ghLabels, !($content['labels']['pageInfo']['hasNextPage'] ?? false)), 'labels GitHub→Deck');
 		}
 		if ($this->fieldAllowed($fieldMap, 'assignees', BoardMap::DIR_TO_DECK) && $userMap !== []) {
 			$deckUids = [];
@@ -627,11 +669,11 @@ class SyncService {
 					$deckUids[] = $uid;
 				}
 			}
-			$this->deck->syncAssignees($userId, (int)$card['id'], $deckUids, ($content['assignees']['pageInfo']['hasNextPage'] ?? false) ? [] : array_values($userMap['gh2deck']));
+			$this->bestEffort(fn () => $this->deck->syncAssignees($userId, (int)$card['id'], $deckUids, ($content['assignees']['pageInfo']['hasNextPage'] ?? false) ? [] : array_values($userMap['gh2deck'])), 'assignees GitHub→Deck');
 		}
 		if ($this->fieldAllowed($fieldMap, 'comments', BoardMap::DIR_TO_DECK)
 			&& ($content['__typename'] ?? '') === 'Issue') {
-			$this->pullMissingComments($userId, (int)$card['id'], $gItem);
+			$this->bestEffort(fn () => $this->pullMissingComments($userId, (int)$card['id'], $gItem), 'comments GitHub→Deck');
 		}
 		return $patch;
 	}

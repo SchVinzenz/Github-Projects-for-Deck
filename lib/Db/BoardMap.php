@@ -70,6 +70,23 @@ class BoardMap extends Entity {
 		$this->addType('lastSync', 'integer');
 	}
 
+	/** Nullable DB columns are normalized to '' so callers can use strict comparisons. */
+	public function getGithubRepository(): string {
+		return (string)($this->githubRepository ?? '');
+	}
+
+	public function getStatusFieldId(): string {
+		return (string)($this->statusFieldId ?? '');
+	}
+
+	public function getDateFieldId(): string {
+		return (string)($this->dateFieldId ?? '');
+	}
+
+	public function getStartFieldId(): string {
+		return (string)($this->startFieldId ?? '');
+	}
+
 	/** @return array<string,string> field => direction */
 	public function getFieldMap(): array {
 		$defaults = [

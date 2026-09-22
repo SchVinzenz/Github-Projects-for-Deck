@@ -46,13 +46,13 @@ class ProjectDiscoveryTest extends TestCase {
 		$client->expects($this->once())->method('graphql')->willReturnCallback(static function (string $uid, string $query, array $vars): array {
 			self::assertStringContainsString('convertProjectV2DraftIssueItemToIssue', $query);
 			self::assertStringContainsString('__typename', $query);
-			self::assertSame(['item' => 'I1', 'repo' => 'R1'], $vars);
+			self::assertSame(['project' => 'P1', 'item' => 'I1', 'repo' => 'R1'], $vars);
 			return ['data' => ['convertProjectV2DraftIssueItemToIssue' => ['item' => [
 				'id' => 'I1', 'content' => ['__typename' => 'Issue', 'number' => 7],
 			]]]];
 		});
 		$service = new GithubProjectService($client, $this->createMock(LoggerInterface::class));
-		$this->assertSame('Issue', $service->convertDraftToIssue('alice', 'I1', 'org/repo')['content']['__typename']);
+		$this->assertSame('Issue', $service->convertDraftToIssue('alice', 'P1', 'I1', 'org/repo')['content']['__typename']);
 	}
 
 	public function testResolvesPersonalProjectWhenOrganizationLookupWouldFail(): void {

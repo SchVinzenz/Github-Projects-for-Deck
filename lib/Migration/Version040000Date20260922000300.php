@@ -16,10 +16,10 @@ class Version040000Date20260922000300 extends SimpleMigrationStep {
 		if ($schema->hasTable('deckghs_boardmap')) {
 			$table = $schema->getTable('deckghs_boardmap');
 			if (!$table->hasColumn('github_repository')) {
-				$table->addColumn('github_repository', Types::STRING, ['notnull' => true, 'length' => 255, 'default' => '']);
+				$table->addColumn('github_repository', Types::STRING, ['notnull' => false, 'length' => 255]);
 			}
 			if (!$table->hasColumn('start_field_id')) {
-				$table->addColumn('start_field_id', Types::STRING, ['notnull' => true, 'length' => 64, 'default' => '']);
+				$table->addColumn('start_field_id', Types::STRING, ['notnull' => false, 'length' => 64]);
 			}
 		}
 		return $schema;

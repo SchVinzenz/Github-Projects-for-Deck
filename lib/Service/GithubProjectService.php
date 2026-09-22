@@ -160,6 +160,7 @@ class GithubProjectService {
 		$statusFieldId = '';
 		$dateFieldId = '';
 		$startDateFieldId = '';
+		$dateFields = [];
 		$options = [];
 		foreach ($nodes as $f) {
 			if (($f['name'] ?? '') === 'Status' && isset($f['options'])) {
@@ -169,6 +170,7 @@ class GithubProjectService {
 				}
 			}
 			if (($f['dataType'] ?? '') === 'DATE') {
+				$dateFields[] = $f;
 				$name = mb_strtolower((string)($f['name'] ?? ''));
 				if (str_contains($name, 'start')) {
 					$startDateFieldId = $f['id'];
@@ -176,6 +178,9 @@ class GithubProjectService {
 					$dateFieldId = $f['id'];
 				}
 			}
+		}
+		if ($dateFieldId === '' && count($dateFields) === 1) {
+			$dateFieldId = $dateFields[0]['id'];
 		}
 		return ['fields' => $nodes, 'statusFieldId' => $statusFieldId, 'dateFieldId' => $dateFieldId, 'startDateFieldId' => $startDateFieldId, 'options' => $options];
 	}
@@ -287,10 +292,10 @@ class GithubProjectService {
 	}
 
 	/** Convert a Project draft in place so the Project item keeps its Status and dates. */
-	public function convertDraftToIssue(string $userId, string $itemId, string $repository): array {
+	public function convertDraftToIssue(string $userId, string $projectId, string $itemId, string $repository): array {
 		$repositoryId = $this->getRepositoryNodeId($userId, $repository);
-		$q = 'mutation($item:ID!,$repo:ID!){ convertProjectV2DraftIssueItemToIssue(input:{itemId:$item repositoryId:$repo}){ item{ id updatedAt content{ __typename ... on Issue{ id number title body state closed updatedAt url repository{nameWithOwner} labels(first:100){nodes{name} pageInfo{hasNextPage}} assignees(first:100){nodes{login} pageInfo{hasNextPage}} } } fieldValues(first:100){nodes{ ... on ProjectV2ItemFieldSingleSelectValue{ name optionId field{ ... on ProjectV2FieldCommon{id name} } } ... on ProjectV2ItemFieldDateValue{ date field{ ... on ProjectV2FieldCommon{id name} } } } } } }';
-		$res = $this->client->graphql($userId, $q, ['item' => $itemId, 'repo' => $repositoryId]);
+		$q = 'mutation($project:ID!,$item:ID!,$repo:ID!){ convertProjectV2DraftIssueItemToIssue(input:{projectId:$project itemId:$item repositoryId:$repo}){ item{ id updatedAt content{ __typename ... on Issue{ id number title body state closed updatedAt url repository{nameWithOwner} labels(first:100){nodes{name} pageInfo{hasNextPage}} assignees(first:100){nodes{login} pageInfo{hasNextPage}} } } fieldValues(first:100){nodes{ ... on ProjectV2ItemFieldSingleSelectValue{ name optionId field{ ... on ProjectV2FieldCommon{id name} } } ... on ProjectV2ItemFieldDateValue{ date field{ ... on ProjectV2FieldCommon{id name} } } } } } }';
+		$res = $this->client->graphql($userId, $q, ['project' => $projectId, 'item' => $itemId, 'repo' => $repositoryId]);
 		$item = $res['data']['convertProjectV2DraftIssueItemToIssue']['item'] ?? null;
 		if (!is_array($item) || empty($item['id']) || empty($item['content']['number'])) {
 			throw new \RuntimeException('GitHub draft could not be converted to an issue');
