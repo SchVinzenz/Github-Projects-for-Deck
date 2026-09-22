@@ -12,14 +12,16 @@ namespace OCA\DeckGithubSync\Settings;
 use OCA\DeckGithubSync\AppInfo\Application;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\Settings\IDelegatedSettings;
+use OCP\Util;
 
 class PersonalSettings implements IDelegatedSettings {
 	public function getForm(): TemplateResponse {
+		Util::addScript(Application::APP_ID, Application::APP_ID . '-personal');
 		return new TemplateResponse(Application::APP_ID, 'personal');
 	}
 
 	public function getSection(): string {
-		return 'connected-accounts';
+		return Application::APP_ID;
 	}
 
 	public function getPriority(): int {

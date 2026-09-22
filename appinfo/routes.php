@@ -20,7 +20,4 @@ return [
 		['name' => 'sync#status', 'url' => '/api/v1/sync/{id}/status', 'verb' => 'GET'],
 		['name' => 'webhook#github', 'url' => '/webhook/github', 'verb' => 'POST'],
 	],
-	'ocs' => [
-		['name' => 'sync#trigger', 'url' => '/api/v1/sync/{id}', 'verb' => 'POST'],
-	],
 ];

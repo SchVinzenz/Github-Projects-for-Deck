@@ -11,6 +11,8 @@ namespace OCA\DeckGithubSync\Controller;
 
 use OCA\DeckGithubSync\Db\BoardMapMapper;
 use OCP\AppFramework\Controller;
+use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\Http;
 use OCP\IConfig;
@@ -32,7 +34,8 @@ class WebhookController extends Controller {
 		parent::__construct($appName, $request);
 	}
 
-	/** @PublicPage @NoCSRFRequired */
+	#[PublicPage]
+	#[NoCSRFRequired]
 	public function github(): DataResponse {
 		$secret = $this->config->getAppValue('deckgithubsync', 'webhook_secret', '');
 		$body = file_get_contents('php://input') ?: '';

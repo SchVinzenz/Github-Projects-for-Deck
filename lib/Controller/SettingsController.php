@@ -15,6 +15,7 @@ use OCA\DeckGithubSync\Db\UserMap;
 use OCA\DeckGithubSync\Db\UserMapMapper;
 use OCA\DeckGithubSync\Service\GithubProjectService;
 use OCP\AppFramework\Controller;
+use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\Http;
 use OCP\IConfig;
@@ -33,13 +34,13 @@ class SettingsController extends Controller {
 		parent::__construct($appName, $request);
 	}
 
-	/** @NoAdminRequired */
+	#[NoAdminRequired]
 	public function listMappings(): DataResponse {
 		$maps = $this->maps->findByUser($this->userId ?? '');
 		return new DataResponse(array_map(fn ($m) => $this->serialize($m), $maps));
 	}
 
-	/** @NoAdminRequired */
+	#[NoAdminRequired]
 	public function createMapping(int $deckBoardId, string $githubOwner, int $githubNumber, string $direction = 'both', array $fieldConfig = []): DataResponse {
 		if (!in_array($direction, ['both', 'deck_to_github', 'github_to_deck'], true)) {
 			return new DataResponse(['error' => 'Invalid direction'], Http::STATUS_BAD_REQUEST);
@@ -65,7 +66,7 @@ class SettingsController extends Controller {
 		return new DataResponse($this->serialize($map), Http::STATUS_CREATED);
 	}
 
-	/** @NoAdminRequired */
+	#[NoAdminRequired]
 	public function updateMapping(int $id, ?string $direction = null, ?array $fieldConfig = null, ?string $dateFieldId = null): DataResponse {
 		try {
 			$map = $this->maps->find($id);
@@ -88,7 +89,7 @@ class SettingsController extends Controller {
 		return new DataResponse($this->serialize($map));
 	}
 
-	/** @NoAdminRequired */
+	#[NoAdminRequired]
 	public function deleteMapping(int $id): DataResponse {
 		try {
 			$map = $this->maps->find($id);
@@ -146,7 +147,7 @@ class SettingsController extends Controller {
 		];
 	}
 
-	/** @NoAdminRequired */
+	#[NoAdminRequired]
 	public function setUserMap(int $id, array $users): DataResponse {
 		try {
 			$map = $this->maps->find($id);

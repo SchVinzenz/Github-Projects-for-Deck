@@ -27,6 +27,12 @@
 	<background-jobs>
 		<job>OCA\DeckGithubSync\BackgroundJob\SyncJob</job>
 	</background-jobs>
+	<settings>
+		<admin>OCA\DeckGithubSync\Settings\AdminSettings</admin>
+		<admin-section>OCA\DeckGithubSync\Settings\AdminSection</admin-section>
+		<personal>OCA\DeckGithubSync\Settings\PersonalSettings</personal>
+		<personal-section>OCA\DeckGithubSync\Settings\PersonalSection</personal-section>
+	</settings>
 	<commands>
 		<command>OCA\DeckGithubSync\Command\SyncCommand</command>
 	</commands>

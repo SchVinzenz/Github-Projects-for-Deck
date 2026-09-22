@@ -12,9 +12,9 @@ namespace OCA\DeckGithubSync\Controller;
 use OCA\DeckGithubSync\Db\BoardMapMapper;
 use OCA\DeckGithubSync\Service\SyncService;
 use OCP\AppFramework\Controller;
+use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\Http;
-use OCP\BackgroundJob\IJobList;
 use OCP\IRequest;
 
 class SyncController extends Controller {
@@ -23,13 +23,12 @@ class SyncController extends Controller {
 		IRequest $request,
 		private BoardMapMapper $maps,
 		private SyncService $sync,
-		private IJobList $jobs,
 		private ?string $userId,
 	) {
 		parent::__construct($appName, $request);
 	}
 
-	/** @NoAdminRequired */
+	#[NoAdminRequired]
 	public function trigger(int $id): DataResponse {
 		try {
 			$map = $this->sync->findMap($id, $this->userId ?? '');
@@ -40,7 +39,7 @@ class SyncController extends Controller {
 		return new DataResponse($stats);
 	}
 
-	/** @NoAdminRequired */
+	#[NoAdminRequired]
 	public function status(int $id): DataResponse {
 		try {
 			$map = $this->sync->findMap($id, $this->userId ?? '');
