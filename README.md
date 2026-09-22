@@ -40,3 +40,7 @@ Nextcloud Deck und GitHub Projects v2.
 - `php -l lib/...`, `./vendor/bin/phpunit tests/Unit` (im Server-Checkout: `NOCOVERAGE=1 ./autotest.sh sqlite apps-extra/deckgithubsync/tests`)
 - Frontend: `npm ci && npm run build`
 - Deck muss installiert sein, sonst wirft `DeckService` mit klarer Meldung.
+
+## Doku
+
+Kurz-Doku unter `docs/`: `SETUP.md`, `ARCHITECTURE.md`, `API.md`, `TROUBLESHOOTING.md`.

@@ -53,6 +53,16 @@ class DeckService {
 	}
 
 	/** @return array<int, array{id:int,title:string}> */
+	public function getBoards(string $userId): array {
+		$boardService = $this->boardService($userId);
+		$out = [];
+		foreach ($boardService->findAll() as $b) {
+			$out[] = ['id' => $b->getId(), 'title' => $b->getTitle()];
+		}
+		return $out;
+	}
+
+	/** @return array<int, array{id:int,title:string}> */
 	public function getStacks(string $userId, int $boardId): array {
 		$boardService = $this->boardService($userId);
 		$boardService->find($boardId);

@@ -9,7 +9,6 @@ declare(strict_types=1);
 
 namespace OCA\DeckGithubSync\Controller;
 
-use OCA\DeckGithubSync\Db\BoardMapMapper;
 use OCA\DeckGithubSync\Service\SyncService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -21,7 +20,6 @@ class SyncController extends Controller {
 	public function __construct(
 		string $appName,
 		IRequest $request,
-		private BoardMapMapper $maps,
 		private SyncService $sync,
 		private ?string $userId,
 	) {

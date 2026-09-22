@@ -11,7 +11,6 @@ namespace OCA\DeckGithubSync\Service;
 
 use OCP\Http\Client\IClientService;
 use OCP\IConfig;
-use OCP\Security\ISecureRandom;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -24,7 +23,6 @@ class GithubClientService {
 	public function __construct(
 		private IClientService $clientService,
 		private IConfig $config,
-		private ISecureRandom $random,
 		private LoggerInterface $logger,
 	) {
 	}
@@ -44,6 +42,62 @@ class GithubClientService {
 
 	public function getUserToken(string $userId): string {
 		return $this->config->getUserValue($userId, 'deckgithubsync', 'github_token', '');
+	}
+
+	public function setUserToken(string $userId, string $token): void {
+		$this->config->setUserValue($userId, 'deckgithubsync', 'github_token', $token);
+	}
+
+	public function clearUserToken(string $userId): void {
+		$this->config->deleteUserValue($userId, 'deckgithubsync', 'github_token');
+		$this->config->deleteUserValue($userId, 'deckgithubsync', 'github_login');
+	}
+
+	public function getStoredLogin(string $userId): string {
+		return $this->config->getUserValue($userId, 'deckgithubsync', 'github_login', '');
+	}
+
+	public function setStoredLogin(string $userId, string $login): void {
+		$this->config->setUserValue($userId, 'deckgithubsync', 'github_login', $login);
+	}
+
+	/** Exchange an OAuth authorize code for a user access token. */
+	public function exchangeOAuthCode(string $clientId, string $clientSecret, string $code): string {
+		$client = $this->clientService->newClient();
+		$resp = $client->post('https://github.com/login/oauth/access_token', [
+			'headers' => ['Accept' => 'application/json', 'User-Agent' => 'Nextcloud-deckgithubsync'],
+			'body' => json_encode([
+				'client_id' => $clientId,
+				'client_secret' => $clientSecret,
+				'code' => $code,
+			]),
+			'timeout' => 20,
+		]);
+		$data = json_decode($resp->getBody(), true);
+		if (!is_array($data) || empty($data['access_token'])) {
+			throw new \RuntimeException('GitHub OAuth exchange failed: ' . ($data['error_description'] ?? $data['error'] ?? 'unknown'));
+		}
+		return $data['access_token'];
+	}
+
+	/** Validate a raw token and return the GitHub login, or null. */
+	public function getTokenLogin(string $token): ?string {
+		$client = $this->clientService->newClient();
+		try {
+			$resp = $client->get(self::API_BASE . '/user', [
+				'headers' => [
+					'Authorization' => 'Bearer ' . $token,
+					'Accept' => 'application/vnd.github+json',
+					'User-Agent' => 'Nextcloud-deckgithubsync',
+				],
+				'timeout' => 20,
+			]);
+			$data = json_decode($resp->getBody(), true);
+			return is_array($data) && isset($data['login']) ? (string)$data['login'] : null;
+		} catch (\Throwable $e) {
+			$this->logger->debug('deckgithubsync: token validation failed', ['exception' => $e]);
+			return null;
+		}
 	}
 
 	private function base64Url(string $data): string {

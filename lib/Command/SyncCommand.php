@@ -29,10 +29,15 @@ class SyncCommand extends Command {
 		$sync = Server::get(SyncService::class);
 		$mapId = $input->getArgument('map-id');
 		if ($mapId !== null) {
-			$map = $maps->findById((int)$mapId);
+			try {
+				$map = $maps->findById((int)$mapId);
+			} catch (\Exception) {
+				$output->writeln('<error>Mapping not found: ' . $mapId . '</error>');
+				return 1;
+			}
 			$stats = $sync->syncBoard($map);
 			$output->writeln(json_encode($stats));
-			return 0;
+			return count($stats['errors']) > 0 ? 1 : 0;
 		}
 		foreach ($maps->findAllDue(time() - 1) as $map) {
 			$stats = $sync->syncBoard($map);

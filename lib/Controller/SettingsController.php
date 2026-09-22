@@ -13,6 +13,8 @@ use OCA\DeckGithubSync\Db\BoardMap;
 use OCA\DeckGithubSync\Db\BoardMapMapper;
 use OCA\DeckGithubSync\Db\UserMap;
 use OCA\DeckGithubSync\Db\UserMapMapper;
+use OCA\DeckGithubSync\Service\DeckService;
+use OCA\DeckGithubSync\Service\GithubClientService;
 use OCA\DeckGithubSync\Service\GithubProjectService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -20,6 +22,7 @@ use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\Http;
 use OCP\IConfig;
 use OCP\IRequest;
+use OCP\IURLGenerator;
 
 class SettingsController extends Controller {
 	public function __construct(
@@ -29,6 +32,9 @@ class SettingsController extends Controller {
 		private BoardMapMapper $maps,
 		private UserMapMapper $userMaps,
 		private GithubProjectService $projects,
+		private GithubClientService $github,
+		private DeckService $deck,
+		private IURLGenerator $urls,
 		private ?string $userId,
 	) {
 		parent::__construct($appName, $request);
@@ -110,10 +116,13 @@ class SettingsController extends Controller {
 			'has_private_key' => $this->config->getAppValue('deckgithubsync', 'github_private_key', '') !== '',
 			'has_webhook_secret' => $this->config->getAppValue('deckgithubsync', 'webhook_secret', '') !== '',
 			'sync_interval' => (int)$this->config->getAppValue('deckgithubsync', 'sync_interval', '900'),
+			'oauth_client_id' => $this->config->getAppValue('deckgithubsync', 'oauth_client_id', ''),
+			'has_oauth_secret' => $this->config->getAppValue('deckgithubsync', 'oauth_client_secret', '') !== '',
+			'oauth_callback_url' => $this->urls->linkToRouteAbsolute('deckgithubsync.oAuth.callback'),
 		]);
 	}
 
-	public function setAdmin(string $githubAppId = '', string $githubInstallationId = '', string $githubPrivateKey = '', string $webhookSecret = '', int $syncInterval = 900): DataResponse {
+	public function setAdmin(string $githubAppId = '', string $githubInstallationId = '', string $githubPrivateKey = '', string $webhookSecret = '', int $syncInterval = 900, string $oauthClientId = '', string $oauthClientSecret = ''): DataResponse {
 		$this->config->setAppValue('deckgithubsync', 'github_app_id', $githubAppId);
 		$this->config->setAppValue('deckgithubsync', 'github_installation_id', $githubInstallationId);
 		if ($githubPrivateKey !== '') {
@@ -123,7 +132,51 @@ class SettingsController extends Controller {
 			$this->config->setAppValue('deckgithubsync', 'webhook_secret', $webhookSecret);
 		}
 		$this->config->setAppValue('deckgithubsync', 'sync_interval', (string)max(300, $syncInterval));
+		$this->config->setAppValue('deckgithubsync', 'oauth_client_id', $oauthClientId);
+		if ($oauthClientSecret !== '') {
+			$this->config->setAppValue('deckgithubsync', 'oauth_client_secret', $oauthClientSecret);
+		}
 		return $this->getAdmin();
+	}
+
+	/** @NoAdminRequired */
+	public function listBoards(): DataResponse {
+		try {
+			return new DataResponse($this->deck->getBoards($this->userId ?? ''));
+		} catch (\Throwable $e) {
+			return new DataResponse(['error' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+		}
+	}
+
+	/** @NoAdminRequired */
+	public function githubStatus(): DataResponse {
+		$oauth = $this->config->getAppValue('deckgithubsync', 'oauth_client_id', '') !== '';
+		$token = $this->github->getUserToken($this->userId ?? '');
+		if ($token === '') {
+			return new DataResponse(['connected' => false, 'oauth' => $oauth]);
+		}
+		$login = $this->github->getTokenLogin($token);
+		if ($login === null) {
+			return new DataResponse(['connected' => false, 'invalid' => true, 'oauth' => $oauth]);
+		}
+		return new DataResponse(['connected' => true, 'login' => $login, 'oauth' => $oauth]);
+	}
+
+	/** @NoAdminRequired */
+	public function setUserToken(string $token): DataResponse {
+		$login = $this->github->getTokenLogin(trim($token));
+		if ($login === null) {
+			return new DataResponse(['error' => 'Token ist ungültig oder GitHub ist nicht erreichbar'], Http::STATUS_BAD_REQUEST);
+		}
+		$this->github->setUserToken($this->userId ?? '', trim($token));
+		$this->github->setStoredLogin($this->userId ?? '', $login);
+		return new DataResponse(['connected' => true, 'login' => $login]);
+	}
+
+	/** @NoAdminRequired */
+	public function disconnectGithub(): DataResponse {
+		$this->github->clearUserToken($this->userId ?? '');
+		return new DataResponse(['connected' => false]);
 	}
 
 	private function serialize(BoardMap $m): array {

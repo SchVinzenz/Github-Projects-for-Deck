@@ -17,6 +17,7 @@ use OCP\Util;
 class PersonalSettings implements IDelegatedSettings {
 	public function getForm(): TemplateResponse {
 		Util::addScript(Application::APP_ID, Application::APP_ID . '-personal');
+		Util::addStyle(Application::APP_ID, Application::APP_ID . '-personal');
 		return new TemplateResponse(Application::APP_ID, 'personal');
 	}
 

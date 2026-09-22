@@ -32,6 +32,7 @@ class AdminSettings implements IDelegatedSettings {
 			'sync_interval' => (int)$this->config->getAppValue(Application::APP_ID, 'sync_interval', '900'),
 		]);
 		Util::addScript(Application::APP_ID, Application::APP_ID . '-admin');
+		Util::addStyle(Application::APP_ID, Application::APP_ID . '-admin');
 		return new TemplateResponse(Application::APP_ID, 'admin');
 	}
 

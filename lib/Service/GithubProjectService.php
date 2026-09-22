@@ -129,14 +129,6 @@ class GithubProjectService {
 		return null;
 	}
 
-	public function updateIssue(string $userId, string $issueNodeId, ?string $title = null, ?string $body = null, ?bool $closed = null): void {
-		$m = 'mutation($id:ID!,$t:String,$b:String,$s:[String!]){ updateIssue(input:{id:$id title:$t body:$b state:$s}){ issue{ id } } }';
-		$state = $closed === null ? null : [$closed ? 'CLOSED' : 'OPEN'];
-		// GraphQL updateIssue treats omitted optional args as unchanged only when variable is absent;
-		// send minimal payload via REST fallback if needed. Here variables with null are ignored by server.
-		$this->client->graphql($userId, $m, ['id' => $issueNodeId, 't' => $title, 'b' => $body, 's' => $state]);
-	}
-
 	/** Update issue via REST (repo-scoped, robust for title/body/state/labels/assignees). */
 	public function updateIssueRest(string $userId, string $repo, int $number, array $fields): void {
 		$this->client->rest($userId, 'PATCH', '/repos/' . $repo . '/issues/' . $number, $fields);

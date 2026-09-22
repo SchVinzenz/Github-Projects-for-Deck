@@ -48,16 +48,27 @@ class SyncService {
 		$allowToGithub = in_array($boardDir, [BoardMap::DIR_BOTH, BoardMap::DIR_TO_GITHUB], true);
 		$allowToDeck = in_array($boardDir, [BoardMap::DIR_BOTH, BoardMap::DIR_TO_DECK], true);
 
-		$deckCards = $this->deck->getCards($userId, $map->getDeckBoardId());
-		$stacks = $this->deck->getStacks($userId, $map->getDeckBoardId());
+		$deckCards = [];
+		$stacks = [];
+		try {
+			$deckCards = $this->deck->getCards($userId, $map->getDeckBoardId());
+			$stacks = $this->deck->getStacks($userId, $map->getDeckBoardId());
+		} catch (\Throwable $e) {
+			$this->logger->warning('deckgithubsync: Deck fetch failed', ['exception' => $e]);
+			$stats['errors'][] = 'deck: ' . $e->getMessage();
+			return $stats;
+		}
 		$stackByTitle = [];
 		$stackById = [];
 		foreach ($stacks as $s) {
 			$stackByTitle[strtolower($s['title'])] = $s['id'];
 			$stackById[$s['id']] = $s['title'];
 		}
+		if ($stacks === [] && $allowToDeck) {
+			$stats['errors'][] = 'deck: board has no stacks';
+			return $stats;
+		}
 
-		$fields = null;
 		$options = [];
 		$statusFieldId = '';
 		$dateFieldId = '';
@@ -113,7 +124,7 @@ class SyncService {
 						}
 						if ($allowToDeck && $allowToGithub && $this->newerSide($card, $gItem) === 'github') {
 							$this->pullGithubToDeck($map, $userId, $card, $gItem, $fieldMap, $stackByTitle, $dateFieldId, $userMap);
-							$existing->setSyncHash($this->hashDeck($this->findDeckCard($card['id'], $deckCards) ?? $card));
+							$existing->setSyncHash($this->hashGithub($gItem));
 							$this->itemMaps->update($existing);
 							$stats['github_to_deck']++;
 							continue;
@@ -223,7 +234,11 @@ class SyncService {
 			return; // read-only
 		}
 		if ($type === 'DraftIssue') {
-			if ($this->fieldAllowed($fieldMap, 'title', BoardMap::DIR_TO_GITHUB) || $this->fieldAllowed($fieldMap, 'description', BoardMap::DIR_TO_GITHUB)) {
+			$titleAllowed = $this->fieldAllowed($fieldMap, 'title', BoardMap::DIR_TO_GITHUB);
+			$bodyAllowed = $this->fieldAllowed($fieldMap, 'description', BoardMap::DIR_TO_GITHUB);
+			$titleChanged = $titleAllowed && ($content['title'] ?? null) !== $card['title'];
+			$bodyChanged = $bodyAllowed && ($content['body'] ?? null) !== ($card['description'] ?? '');
+			if ($titleChanged || $bodyChanged) {
 				$this->github->updateDraft($userId, $gItem['id'], $content['id'] ?? '', $card['title'], $card['description']);
 			}
 		} elseif ($type === 'Issue') {
