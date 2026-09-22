@@ -11,6 +11,7 @@ namespace OCA\DeckGithubSync\Controller;
 
 use OCA\DeckGithubSync\Db\BoardMap;
 use OCA\DeckGithubSync\Db\BoardMapMapper;
+use OCA\DeckGithubSync\Db\ItemMapMapper;
 use OCA\DeckGithubSync\Db\UserMap;
 use OCA\DeckGithubSync\Db\UserMapMapper;
 use OCA\DeckGithubSync\Service\DeckService;
@@ -21,6 +22,7 @@ use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\Http;
 use OCP\IConfig;
+use OCP\IDBConnection;
 use OCP\IRequest;
 use OCP\IURLGenerator;
 
@@ -29,7 +31,9 @@ class SettingsController extends Controller {
 		string $appName,
 		IRequest $request,
 		private IConfig $config,
+		private IDBConnection $db,
 		private BoardMapMapper $maps,
+		private ItemMapMapper $itemMaps,
 		private UserMapMapper $userMaps,
 		private GithubProjectService $projects,
 		private GithubClientService $github,
@@ -62,7 +66,12 @@ class SettingsController extends Controller {
 			return new DataResponse(['error' => 'GitHub Project konnte nicht geprüft werden. Bitte Zugriff und Project-Berechtigungen prüfen.'], Http::STATUS_BAD_GATEWAY);
 		}
 		if ($projectId === null) {
-			return new DataResponse(['error' => 'GitHub project not found'], Http::STATUS_BAD_REQUEST);
+			return new DataResponse(['error' => 'GitHub Project wurde nicht gefunden. Owner und Project-Nummer prüfen.'], Http::STATUS_BAD_REQUEST);
+		}
+		foreach ($this->maps->findByUser($this->userId ?? '') as $existing) {
+			if ($existing->getDeckBoardId() === $deckBoardId && $existing->getGithubProjectId() === $projectId) {
+				return new DataResponse(['error' => 'Für dieses Deck-Board und GitHub Project gibt es bereits ein Mapping.'], Http::STATUS_CONFLICT);
+			}
 		}
 		try {
 			$fields = $this->projects->getFields($this->userId ?? '', $projectId);
@@ -120,7 +129,20 @@ class SettingsController extends Controller {
 		if ($map->getUserId() !== $this->userId) {
 			return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
 		}
-		$this->maps->delete($map);
+		$this->db->beginTransaction();
+		try {
+			foreach ($this->itemMaps->findByMap($id) as $item) {
+				$this->itemMaps->delete($item);
+			}
+			foreach ($this->userMaps->findByMap($id) as $user) {
+				$this->userMaps->delete($user);
+			}
+			$this->maps->delete($map);
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			return new DataResponse(['error' => 'Mapping konnte nicht gelöscht werden.'], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
 		return new DataResponse([]);
 	}
 

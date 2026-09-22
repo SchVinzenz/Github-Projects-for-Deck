@@ -116,7 +116,7 @@
 						<option value="github_to_deck">GitHub → Deck</option>
 					</select>
 				</label>
-				<button class="deckghs-btn primary" :disabled="!canCreate" @click="create">Anlegen</button>
+				<button class="deckghs-btn primary" :disabled="!canCreate || creating" @click="create">{{ creating ? 'Legt an …' : 'Anlegen' }}</button>
 			</div>
 			<p v-if="projectError" class="deckghs-note deckghs-note-warn">{{ projectError }}</p>
 			<div class="deckghs-row">
@@ -163,6 +163,7 @@ export default {
 			syncing: {},
 			checkingConnection: false,
 			savingPat: false,
+			creating: false,
 			notice: '',
 			error: '',
 		}
@@ -260,6 +261,8 @@ export default {
 		},
 		async create() {
 			this.error = ''
+			this.notice = ''
+			this.creating = true
 			try {
 				const selected = this.projects.find((p) => p.id === this.selectedProjectId)
 				const payload = this.projectMode === 'select'
@@ -269,8 +272,11 @@ export default {
 				this.mappings.push(data)
 				this.form = { deckBoardId: 0, githubOwner: '', githubNumber: null, direction: 'both' }
 				this.selectedProjectId = ''
+				this.notice = 'Mapping angelegt.'
 			} catch (e) {
 				this.error = e.response?.data?.error || 'Mapping konnte nicht angelegt werden (GitHub-Project prüfen).'
+			} finally {
+				this.creating = false
 			}
 		},
 		async update(m) {
@@ -298,8 +304,14 @@ export default {
 			if (!window.confirm('Mapping wirklich löschen?')) {
 				return
 			}
-			await axios.delete(apiUrl(`/api/v1/mappings/${m.id}`))
-			this.mappings = this.mappings.filter((x) => x.id !== m.id)
+			this.error = ''
+			try {
+				await axios.delete(apiUrl(`/api/v1/mappings/${m.id}`))
+				this.mappings = this.mappings.filter((x) => x.id !== m.id)
+				this.notice = 'Mapping gelöscht.'
+			} catch (e) {
+				this.error = e.response?.data?.error || 'Mapping konnte nicht gelöscht werden.'
+			}
 		},
 		async sync(m) {
 			this.syncing[m.id] = true
@@ -307,9 +319,10 @@ export default {
 				const { data } = await axios.post(apiUrl(`/api/v1/sync/${m.id}`))
 				const errs = (data.errors || []).length
 				this.results[m.id] = `Deck→GitHub: ${data.deck_to_github}, GitHub→Deck: ${data.github_to_deck}` + (errs ? `, Fehler: ${errs}` : '')
-				m.lastSync = Math.floor(Date.now() / 1000)
 				if (errs) {
 					this.error = data.errors.join('; ')
+				} else {
+					m.lastSync = Math.floor(Date.now() / 1000)
 				}
 			} catch (e) {
 				this.error = 'Sync fehlgeschlagen.'

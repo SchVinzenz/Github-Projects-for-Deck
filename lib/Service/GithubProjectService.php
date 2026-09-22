@@ -78,9 +78,22 @@ class GithubProjectService {
 			$after = null;
 			do {
 				$q = "query(\$login:String!,\$after:String){ $field(login:\$login){ projectsV2(first:100,after:\$after){ nodes{id number title url} pageInfo{hasNextPage endCursor} } } }";
-				$res = $this->client->graphql($userId, $q, ['login' => $owner['login'], 'after' => $after], true);
+				try {
+					$res = $this->client->graphql($userId, $q, ['login' => $owner['login'], 'after' => $after], true);
+				} catch (\Throwable $e) {
+					if ($owner['type'] === 'organization' && $after === null
+						&& str_starts_with($e->getMessage(), 'GitHub GraphQL request failed:')) {
+						$this->logger->warning('deckgithubsync: skipping inaccessible organization projects', ['owner' => $owner['login'], 'exceptionType' => get_class($e)]);
+						continue 2;
+					}
+					throw $e;
+				}
 				$connection = $res['data'][$field]['projectsV2'] ?? null;
 				if (!is_array($connection)) {
+					if ($owner['type'] === 'organization' && $after === null) {
+						$this->logger->warning('deckgithubsync: skipping unavailable organization projects', ['owner' => $owner['login']]);
+						continue 2;
+					}
 					throw new \RuntimeException('GitHub projects could not be listed for ' . $owner['login']);
 				}
 				foreach ($connection['nodes'] ?? [] as $project) {
@@ -137,10 +150,10 @@ class GithubProjectService {
 			nodes{ id updatedAt
 				content{ __typename
 					... on DraftIssue{ id title body updatedAt }
-					... on Issue{ id number title body state closed url repository{nameWithOwner} assignees(first:10){nodes{login}} labels(first:10){nodes{name}} }
+					... on Issue{ id number title body state closed url repository{nameWithOwner} assignees(first:100){nodes{login}} labels(first:100){nodes{name}} }
 					... on PullRequest{ id number title body state merged url }
 				}
-				fieldValues(first:20){ nodes{ __typename
+				fieldValues(first:100){ nodes{ __typename
 					... on ProjectV2ItemFieldSingleSelectValue{ name optionId field{ ... on ProjectV2FieldCommon{ id name } } }
 					... on ProjectV2ItemFieldTextValue{ text field{ ... on ProjectV2FieldCommon{ id name } } }
 					... on ProjectV2ItemFieldDateValue{ date field{ ... on ProjectV2FieldCommon{ id name } } }
@@ -152,6 +165,9 @@ class GithubProjectService {
 			throw new \RuntimeException('GitHub project query failed: ' . substr($msg, 0, 300));
 		}
 		$conn = $res['data']['node']['items'] ?? ['nodes' => [], 'pageInfo' => []];
+		if (($conn['pageInfo']['hasNextPage'] ?? false) && empty($conn['pageInfo']['endCursor'])) {
+			throw new \RuntimeException('GitHub item pagination failed');
+		}
 		return [
 			'items' => $conn['nodes'] ?? [],
 			'hasNext' => (bool)($conn['pageInfo']['hasNextPage'] ?? false),
@@ -225,14 +241,18 @@ class GithubProjectService {
 
 	/** @return array<int, array{id:int,body:string,user:string,created_at:string}> */
 	public function getIssueComments(string $userId, string $repo, int $number): array {
-		$data = $this->client->rest($userId, 'GET', '/repos/' . $repo . '/issues/' . $number . '/comments?per_page=100');
 		$out = [];
-		foreach ($data as $c) {
-			if (!isset($c['id'])) {
-				continue;
+		$page = 1;
+		do {
+			$data = $this->client->rest($userId, 'GET', '/repos/' . $repo . '/issues/' . $number . '/comments?per_page=100&page=' . $page);
+			foreach ($data as $c) {
+				if (!isset($c['id'])) {
+					continue;
+				}
+				$out[] = ['id' => (int)$c['id'], 'body' => $c['body'] ?? '', 'user' => $c['user']['login'] ?? '', 'created_at' => $c['created_at'] ?? ''];
 			}
-			$out[] = ['id' => (int)$c['id'], 'body' => $c['body'] ?? '', 'user' => $c['user']['login'] ?? '', 'created_at' => $c['created_at'] ?? ''];
-		}
+			$page++;
+		} while (count($data) === 100);
 		return $out;
 	}
 

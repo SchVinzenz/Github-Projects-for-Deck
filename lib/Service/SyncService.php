@@ -157,6 +157,15 @@ class SyncService {
 						if (($gItem['content']['__typename'] ?? '') === 'PullRequest') {
 							continue; // PRs are read-only, never push
 						}
+						if ($existing->getSyncHash() === 'pending_draft') {
+							$this->pushDeckToGithub($map, $userId, $card, $gItem, $fieldMap, $statusFieldId, $options, $stackById, $dateFieldId, $userMap);
+							$existing->setDeckHash($hash);
+							$existing->setGithubHash($this->hashGithub($gItem));
+							$existing->setSyncHash('');
+							$this->itemMaps->update($existing);
+							$stats['deck_to_github']++;
+							continue;
+						}
 						if ($allowToDeck && $allowToGithub && $this->newerSide($card, $gItem) === 'github') {
 							$patch = $this->pullGithubToDeck($map, $userId, $card, $gItem, $fieldMap, $stackByTitle, $dateFieldId, $userMap);
 							$existing->setGithubHash($this->hashGithub($gItem));
@@ -172,7 +181,8 @@ class SyncService {
 						// Duplicate protection: adopt untracked GitHub item with same title
 						$matchId = $untrackedGhByTitle[$this->normTitle($card['title'])] ?? null;
 						if ($matchId !== null && isset($githubItems[$matchId])) {
-							$link = $this->linkItems($map->getId(), (int)$card['id'], $matchId, $githubItems[$matchId], $hash, $this->hashGithub($githubItems[$matchId]));
+							// Matching titles identify the same item, but do not prove equal content.
+							$link = $this->linkItems($map->getId(), (int)$card['id'], $matchId, $githubItems[$matchId], '', '');
 							if ($link !== null) {
 								$known['deck:' . $card['id']] = $known['gh:' . $matchId] = $link;
 								unset($untrackedGhByTitle[$this->normTitle($card['title'])]);
@@ -182,8 +192,14 @@ class SyncService {
 						}
 						$itemId = $this->github->addDraft($userId, $map->getGithubProjectId(), $card['title'], $card['description']);
 						if ($itemId === null) {
-							continue;
+							throw new \RuntimeException('GitHub did not return an item ID for the new draft');
 						}
+						// Persist the link before optional field updates so a failed update cannot create a duplicate draft on retry.
+						$im = $this->linkItems($map->getId(), (int)$card['id'], $itemId, ['content' => ['id' => '', '__typename' => 'DraftIssue']], '', '', true);
+						if ($im === null) {
+							throw new \RuntimeException('Could not link the newly created GitHub draft');
+						}
+						$known['deck:' . $card['id']] = $known['gh:' . $itemId] = $im;
 						$stackTitle = $stackById[$card['stackId']] ?? '';
 						if ($this->fieldAllowed($fieldMap, 'status', BoardMap::DIR_TO_GITHUB) && $stackTitle !== '' && isset($options[$stackTitle]) && $statusFieldId !== '') {
 							$this->github->setStatus($userId, $map->getGithubProjectId(), $itemId, $statusFieldId, $options[$stackTitle]);
@@ -194,10 +210,9 @@ class SyncService {
 								$this->github->setDate($userId, $map->getGithubProjectId(), $itemId, $dateFieldId, $deckDue);
 							}
 						}
-						$im = $this->linkItems($map->getId(), (int)$card['id'], $itemId, ['content' => ['id' => '', '__typename' => 'DraftIssue']], $hash, '');
-						if ($im !== null) {
-							$known['deck:' . $card['id']] = $known['gh:' . $itemId] = $im;
-						}
+						$im->setDeckHash($hash);
+						$im->setSyncHash('');
+						$this->itemMaps->update($im);
 					}
 					$stats['deck_to_github']++;
 				} catch (\Throwable $e) {
@@ -240,7 +255,7 @@ class SyncService {
 					$matchCardId = $untrackedDeckByTitle[$this->normTitle($title)] ?? null;
 					$matchCard = $matchCardId !== null ? $this->findDeckCard($matchCardId, $deckCards) : null;
 					if ($matchCard !== null) {
-						$link = $this->linkItems($map->getId(), $matchCardId, $itemId, $item, $this->hashDeck($matchCard), $this->hashGithub($item));
+						$link = $this->linkItems($map->getId(), $matchCardId, $itemId, $item, '', '');
 						if ($link !== null) {
 							$known['deck:' . $matchCardId] = $known['gh:' . $itemId] = $link;
 							unset($untrackedDeckByTitle[$this->normTitle($title)]);
@@ -279,7 +294,9 @@ class SyncService {
 			}
 		}
 
-		$map->setLastSync(time());
+		if ($stats['errors'] === []) {
+			$map->setLastSync(time());
+		}
 		$this->boardMaps->update($map);
 		return $stats;
 	}
@@ -293,7 +310,7 @@ class SyncService {
 	 * Create an item link unless one already exists (race-safe).
 	 * @return ItemMap|null the link, or null when a conflicting link exists
 	 */
-	private function linkItems(int $mapId, int $deckCardId, string $githubItemId, array $gItem, string $deckHash, string $githubHash): ?ItemMap {
+	private function linkItems(int $mapId, int $deckCardId, string $githubItemId, array $gItem, string $deckHash, string $githubHash, bool $pendingDraft = false): ?ItemMap {
 		try {
 			$byCard = $this->itemMaps->findByDeckCard($mapId, $deckCardId);
 			$byItem = $this->itemMaps->findByGithubItem($mapId, $githubItemId);
@@ -308,7 +325,7 @@ class SyncService {
 			$im->setGithubItemId($githubItemId);
 			$im->setGithubContentId($content['id'] ?? '');
 			$im->setContentType($content['__typename'] ?? 'DraftIssue');
-			$im->setSyncHash($deckHash !== '' ? $deckHash : $githubHash);
+			$im->setSyncHash($pendingDraft ? 'pending_draft' : ($deckHash !== '' ? $deckHash : $githubHash));
 			$im->setDeckHash($deckHash);
 			$im->setGithubHash($githubHash);
 			$this->itemMaps->insert($im);

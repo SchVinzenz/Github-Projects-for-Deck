@@ -39,10 +39,12 @@ class SyncCommand extends Command {
 			$output->writeln(json_encode($stats));
 			return count($stats['errors']) > 0 ? 1 : 0;
 		}
+		$failed = false;
 		foreach ($maps->findAllDue(time() - 1) as $map) {
 			$stats = $sync->syncBoard($map);
 			$output->writeln("map {$map->getId()}: " . json_encode($stats));
+			$failed = $failed || $stats['errors'] !== [];
 		}
-		return 0;
+		return $failed ? 1 : 0;
 	}
 }

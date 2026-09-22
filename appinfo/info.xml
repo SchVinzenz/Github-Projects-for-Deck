@@ -15,7 +15,7 @@
 * Title, description, labels, assignees, due date, comments
 * GitHub App (installation token), OAuth login or personal token
 * Webhook (projects_v2_item) + background job fallback]]></description>
-	<version>0.4.6</version>
+	<version>0.4.7</version>
 	<licence>agpl</licence>
 	<author>Nextcloud contributors</author>
 	<namespace>DeckGithubSync</namespace>
