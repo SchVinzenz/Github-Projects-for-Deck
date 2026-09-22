@@ -110,11 +110,15 @@ class GithubClientService {
 
 	public function resolveToken(string $userId): string {
 		try {
-			return $this->getInstallationToken($userId);
+			$token = $this->getInstallationToken($userId);
 		} catch (\Throwable $e) {
 			$this->logger->debug('deckgithubsync: installation token failed, trying PAT', ['exception' => $e]);
-			return $this->getUserToken($userId);
+			$token = $this->getUserToken($userId);
 		}
+		if ($token === '') {
+			throw new \RuntimeException('No GitHub token configured (installation or personal token required)');
+		}
+		return $token;
 	}
 
 	/** Generic REST call, returns decoded JSON. @return array<string,mixed> */

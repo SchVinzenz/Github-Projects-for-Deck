@@ -10,20 +10,26 @@ declare(strict_types=1);
 namespace OCA\DeckGithubSync\Service;
 
 use OCP\Comments\ICommentsManager;
+use OCP\IUserManager;
+use OCP\IUserSession;
 use OCP\Server;
 use Psr\Log\LoggerInterface;
 
 /**
  * Access Deck via internal services when installed, otherwise throw.
  *
- * Uses OCA\Deck\Service\{BoardService,StackService,CardService} with the
- * sync user's context. Keeps full card payloads for update() round-trips
- * (Deck clears omitted fields).
+ * Targets Deck 2.x (BoardService::find($boardId), StackService::findAll($boardId),
+ * CardService::find($cardId), LabelMapper::findAll($boardId)). The Deck user
+ * context is set via BoardService::setUserId(), which propagates to the shared
+ * PermissionService. Full card payloads are sent on update() because Deck
+ * clears omitted fields.
  */
 class DeckService {
 	public function __construct(
 		private LoggerInterface $logger,
 		private ICommentsManager $commentsManager,
+		private IUserManager $userManager,
+		private IUserSession $userSession,
 	) {
 	}
 
@@ -33,51 +39,51 @@ class DeckService {
 		}
 	}
 
-	private function services(string $userId): array {
+	private function boardService(string $userId): mixed {
 		$this->assertAvailable();
-		\OC::$server->getUserSession()->setUser(null);
-		$user = \OC::$server->getUserManager()->get($userId);
-		if ($user !== null) {
-			\OC::$server->getUserSession()->setUser($user);
+		$user = $this->userManager->get($userId);
+		if ($user !== null && $this->userSession->getUser()?->getUID() !== $userId) {
+			$this->userSession->setUser($user);
 		}
-		return [
-			Server::get('OCA\Deck\Service\BoardService'),
-			Server::get('OCA\Deck\Service\StackService'),
-			Server::get('OCA\Deck\Service\CardService'),
-		];
+		$boardService = Server::get('OCA\Deck\Service\BoardService');
+		if (method_exists($boardService, 'setUserId')) {
+			$boardService->setUserId($userId);
+		}
+		return $boardService;
 	}
 
 	/** @return array<int, array{id:int,title:string}> */
 	public function getStacks(string $userId, int $boardId): array {
-		[$boardService, $stackService] = $this->services($userId);
-		$boardService->find($boardId, $userId);
-		$stacks = $stackService->findAll($boardId, $userId);
+		$boardService = $this->boardService($userId);
+		$boardService->find($boardId);
+		$stackService = Server::get('OCA\Deck\Service\StackService');
 		$out = [];
-		foreach ($stacks as $s) {
+		foreach ($stackService->findAll($boardId) as $s) {
 			$out[] = ['id' => $s->getId(), 'title' => $s->getTitle()];
 		}
 		return $out;
 	}
 
-	/** @return array<int, array> cards with stackId, title, description, duedate, labels, assignedUsers, comments */
+	/** @return array<int, array> cards with stackId, title, description, duedate, labels, assignedUsers */
 	public function getCards(string $userId, int $boardId): array {
-		[$boardService, $stackService, $cardService] = $this->services($userId);
-		$board = $boardService->find($boardId, $userId);
-		$stacks = $stackService->findAll($board->getId(), $userId);
+		$boardService = $this->boardService($userId);
+		$board = $boardService->find($boardId);
+		$stackService = Server::get('OCA\Deck\Service\StackService');
+		$cardService = Server::get('OCA\Deck\Service\CardService');
+		$cardMapper = Server::get('OCA\Deck\Db\CardMapper');
 		$out = [];
-		foreach ($stacks as $stack) {
-			$cards = $cardService->findAll($stack->getId(), $userId);
-			foreach ($cards as $c) {
-				$details = $cardService->find($c->getId(), $userId);
+		foreach ($stackService->findAll($board->getId()) as $stack) {
+			foreach ($cardMapper->findAll($stack->getId()) as $c) {
+				$details = $cardService->find($c->getId());
 				$out[] = [
 					'id' => $details->getId(),
 					'stackId' => $stack->getId(),
 					'stackTitle' => $stack->getTitle(),
 					'title' => $details->getTitle(),
 					'description' => $details->getDescription() ?? '',
-					'duedate' => $details->getDuedate(),
-					'labels' => array_map(fn ($l) => is_array($l) ? ($l['title'] ?? '') : $l->getTitle(), $details->getLabels() ?? []),
-					'assignedUsers' => array_map(fn ($u) => is_array($u) ? ($u['participant'] ?? '') : $u->getParticipant(), $details->getAssignedUsers() ?? []),
+					'duedate' => $this->dateOrNull($details->getDuedate()),
+					'labels' => $this->labelTitles($details->getLabels() ?? []),
+					'assignedUsers' => $this->assigneeUids($details->getAssignedUsers() ?? []),
 					'lastModified' => $details->getLastModified(),
 				];
 			}
@@ -86,35 +92,38 @@ class DeckService {
 	}
 
 	public function createCard(string $userId, int $stackId, string $title, string $description = '', ?string $duedate = null): int {
-		[, , $cardService] = $this->services($userId);
+		$this->boardService($userId);
+		$cardService = Server::get('OCA\Deck\Service\CardService');
 		$card = $cardService->create($title, $stackId, 'plain', 999, $userId, $description, $duedate);
 		return $card->getId();
 	}
 
 	/** Full round-trip update to avoid Deck clearing omitted fields. */
 	public function updateCard(string $userId, int $cardId, array $patch): void {
-		[, , $cardService] = $this->services($userId);
-		$current = $cardService->find($cardId, $userId);
+		$this->boardService($userId);
+		$cardService = Server::get('OCA\Deck\Service\CardService');
+		$current = $cardService->find($cardId);
 		$cardService->update(
 			$cardId,
-			$patch['stackId'] ?? $current->getStackId(),
 			$patch['title'] ?? $current->getTitle(),
+			$patch['stackId'] ?? $current->getStackId(),
 			$patch['type'] ?? $current->getType(),
-			$patch['order'] ?? $current->getOrder(),
-			$patch['description'] ?? $current->getDescription(),
 			$patch['owner'] ?? $current->getOwner(),
-			$patch['duedate'] ?? $current->getDuedate()
+			$patch['description'] ?? $current->getDescription(),
+			$patch['order'] ?? $current->getOrder(),
+			$patch['duedate'] ?? $this->dateOrNull($current->getDuedate()),
 		);
 	}
 
 	public function moveCard(string $userId, int $cardId, int $targetStackId): void {
-		[, , $cardService] = $this->services($userId);
-		$current = $cardService->find($cardId, $userId);
+		$this->boardService($userId);
+		$cardService = Server::get('OCA\Deck\Service\CardService');
+		$current = $cardService->find($cardId);
 		$this->updateCard($userId, $cardId, [
 			'stackId' => $targetStackId,
 			'title' => $current->getTitle(),
 			'description' => $current->getDescription(),
-			'duedate' => $current->getDuedate(),
+			'duedate' => $this->dateOrNull($current->getDuedate()),
 			'order' => 999,
 		]);
 	}
@@ -140,15 +149,14 @@ class DeckService {
 
 	/** Ensure board labels exist and assign missing ones to card. @param string[] $titles */
 	public function syncLabels(string $userId, int $boardId, int $cardId, array $titles): void {
-		[, , $cardService] = $this->services($userId);
 		try {
-			if (!method_exists($cardService, 'assignLabel')) {
-				return;
-			}
-			$boardLabels = method_exists($cardService, 'getBoardLabels') ? $cardService->getBoardLabels($boardId, $userId) : [];
+			$this->boardService($userId);
+			$labelMapper = Server::get('OCA\Deck\Db\LabelMapper');
+			$labelService = Server::get('OCA\Deck\Service\LabelService');
+			$cardService = Server::get('OCA\Deck\Service\CardService');
 			$byTitle = [];
-			foreach ($boardLabels as $bl) {
-				$byTitle[strtolower(is_array($bl) ? ($bl['title'] ?? '') : $bl->getTitle())] = is_array($bl) ? ($bl['id'] ?? 0) : $bl->getId();
+			foreach ($labelMapper->findAll($boardId) as $bl) {
+				$byTitle[strtolower($bl->getTitle())] = $bl->getId();
 			}
 			foreach ($titles as $t) {
 				$t = trim($t);
@@ -156,13 +164,10 @@ class DeckService {
 					continue;
 				}
 				if (!isset($byTitle[strtolower($t)])) {
-					if (!method_exists($cardService, 'createLabel')) {
-						continue;
-					}
-					$new = $cardService->createLabel($boardId, $t, '000000', $userId);
-					$byTitle[strtolower($t)] = is_array($new) ? ($new['id'] ?? 0) : $new->getId();
+					$new = $labelService->create($t, '000000', $boardId);
+					$byTitle[strtolower($t)] = $new->getId();
 				}
-				$cardService->assignLabel($cardId, $byTitle[strtolower($t)], $userId);
+				$cardService->assignLabel($cardId, $byTitle[strtolower($t)]);
 			}
 		} catch (\Throwable $e) {
 			$this->logger->debug('deckgithubsync: label sync failed', ['exception' => $e]);
@@ -171,26 +176,29 @@ class DeckService {
 
 	/** Assign Deck users that have board access. Unknown users are skipped. @param string[] $deckUserIds */
 	public function syncAssignees(string $userId, int $cardId, array $deckUserIds): void {
-		[, , $cardService] = $this->services($userId);
-		if (!method_exists($cardService, 'assignUser')) {
-			return;
-		}
-		foreach ($deckUserIds as $u) {
-			try {
-				$cardService->assignUser($cardId, trim($u), $userId);
-			} catch (\Throwable $e) {
-				$this->logger->debug('deckgithubsync: assignee sync skipped', ['user' => $u]);
+		try {
+			$this->boardService($userId);
+			$assignmentService = Server::get('OCA\Deck\Service\AssignmentService');
+			foreach ($deckUserIds as $u) {
+				try {
+					$assignmentService->assignUser($cardId, trim($u));
+				} catch (\Throwable $e) {
+					$this->logger->debug('deckgithubsync: assignee sync skipped', ['user' => $u]);
+				}
 			}
+		} catch (\Throwable $e) {
+			$this->logger->debug('deckgithubsync: assignee sync failed', ['exception' => $e]);
 		}
 	}
 
 	public function archiveCard(string $userId, int $cardId, bool $archive = true): void {
-		[, , $cardService] = $this->services($userId);
 		try {
-			if ($archive && method_exists($cardService, 'archive')) {
-				$cardService->archive($cardId, $userId);
-			} elseif (!$archive && method_exists($cardService, 'unarchive')) {
-				$cardService->unarchive($cardId, $userId);
+			$this->boardService($userId);
+			$cardService = Server::get('OCA\Deck\Service\CardService');
+			if ($archive) {
+				$cardService->archive($cardId);
+			} else {
+				$cardService->unarchive($cardId);
 			}
 		} catch (\Throwable $e) {
 			$this->logger->debug('deckgithubsync: archive failed', ['exception' => $e]);
@@ -198,11 +206,10 @@ class DeckService {
 	}
 
 	public function deleteCard(string $userId, int $cardId): void {
-		[, , $cardService] = $this->services($userId);
 		try {
-			if (method_exists($cardService, 'delete')) {
-				$cardService->delete($cardId, $userId);
-			}
+			$this->boardService($userId);
+			$cardService = Server::get('OCA\Deck\Service\CardService');
+			$cardService->delete($cardId);
 		} catch (\Throwable $e) {
 			$this->logger->debug('deckgithubsync: delete failed', ['exception' => $e]);
 		}
@@ -218,5 +225,33 @@ class DeckService {
 		}
 		$ts = strtotime((string)$duedate);
 		return $ts === false ? null : gmdate('Y-m-d', $ts);
+	}
+
+	private function dateOrNull(mixed $duedate): ?string {
+		if ($duedate === null) {
+			return null;
+		}
+		if ($duedate instanceof \DateTimeInterface) {
+			return $duedate->format('Y-m-d\TH:i:sP');
+		}
+		return is_string($duedate) ? $duedate : null;
+	}
+
+	/** @param array $labels */
+	private function labelTitles(array $labels): array {
+		$out = [];
+		foreach ($labels as $l) {
+			$out[] = is_array($l) ? ($l['title'] ?? '') : (method_exists($l, 'getTitle') ? $l->getTitle() : (string)$l);
+		}
+		return array_values(array_filter($out));
+	}
+
+	/** @param array $users */
+	private function assigneeUids(array $users): array {
+		$out = [];
+		foreach ($users as $u) {
+			$out[] = is_array($u) ? ($u['participant'] ?? $u['uid'] ?? '') : (method_exists($u, 'getParticipant') ? $u->getParticipant() : (string)$u);
+		}
+		return array_values(array_filter($out));
 	}
 }

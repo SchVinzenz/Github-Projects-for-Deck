@@ -69,7 +69,7 @@ class SettingsController extends Controller {
 	#[NoAdminRequired]
 	public function updateMapping(int $id, ?string $direction = null, ?array $fieldConfig = null, ?string $dateFieldId = null): DataResponse {
 		try {
-			$map = $this->maps->find($id);
+			$map = $this->maps->findById($id);
 		} catch (\Exception) {
 			return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
 		}
@@ -92,7 +92,7 @@ class SettingsController extends Controller {
 	#[NoAdminRequired]
 	public function deleteMapping(int $id): DataResponse {
 		try {
-			$map = $this->maps->find($id);
+			$map = $this->maps->findById($id);
 		} catch (\Exception) {
 			return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
 		}
@@ -150,7 +150,7 @@ class SettingsController extends Controller {
 	#[NoAdminRequired]
 	public function setUserMap(int $id, array $users): DataResponse {
 		try {
-			$map = $this->maps->find($id);
+			$map = $this->maps->findById($id);
 		} catch (\Exception) {
 			return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
 		}

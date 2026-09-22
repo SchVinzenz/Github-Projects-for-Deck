@@ -32,7 +32,7 @@
 </template>
 
 <script>
-import axios from 'axios'
+import axios from '@nextcloud/axios'
 
 export default {
 	name: 'Personal',

@@ -57,28 +57,38 @@ class SyncService {
 			$stackById[$s['id']] = $s['title'];
 		}
 
-		$fields = $this->github->getFields($userId, $map->getGithubProjectId());
-		$statusFieldId = $map->getStatusFieldId() !== '' ? $map->getStatusFieldId() : $fields['statusFieldId'];
-		$dateFieldId = $map->getDateFieldId() !== '' ? $map->getDateFieldId() : ($fields['dateFieldId'] ?? '');
-		if ($map->getStatusFieldId() === '' && $statusFieldId !== '') {
-			$map->setStatusFieldId($statusFieldId);
+		$fields = null;
+		$options = [];
+		$statusFieldId = '';
+		$dateFieldId = '';
+		$githubItems = [];
+		try {
+			$fields = $this->github->getFields($userId, $map->getGithubProjectId());
+			$statusFieldId = $map->getStatusFieldId() !== '' ? $map->getStatusFieldId() : $fields['statusFieldId'];
+			$dateFieldId = $map->getDateFieldId() !== '' ? $map->getDateFieldId() : ($fields['dateFieldId'] ?? '');
+			if ($map->getStatusFieldId() === '' && $statusFieldId !== '') {
+				$map->setStatusFieldId($statusFieldId);
+			}
+			if ($map->getDateFieldId() === '' && $dateFieldId !== '') {
+				$map->setDateFieldId($dateFieldId);
+			}
+			$options = $fields['options']; // name => id
+
+			$after = null;
+			do {
+				$page = $this->github->listItems($userId, $map->getGithubProjectId(), $after);
+				foreach ($page['items'] as $it) {
+					$githubItems[$it['id']] = $it;
+				}
+				$after = $page['hasNext'] ? $page['cursor'] : null;
+			} while ($after !== null);
+		} catch (\Throwable $e) {
+			$this->logger->warning('deckgithubsync: GitHub fetch failed', ['exception' => $e]);
+			$stats['errors'][] = 'github: ' . $e->getMessage();
+			return $stats;
 		}
-		if ($map->getDateFieldId() === '' && $dateFieldId !== '') {
-			$map->setDateFieldId($dateFieldId);
-		}
-		$options = $fields['options']; // name => id
 
 		$userMap = $this->loadUserMap($map->getId()); // githubLogin(lower) => deckUid + reverse
-
-		$githubItems = [];
-		$after = null;
-		do {
-			$page = $this->github->listItems($userId, $map->getGithubProjectId(), $after);
-			foreach ($page['items'] as $it) {
-				$githubItems[$it['id']] = $it;
-			}
-			$after = $page['hasNext'] ? $page['cursor'] : null;
-		} while ($after !== null);
 
 		$known = [];
 		foreach ($this->itemMaps->findByMap($map->getId()) as $im) {
@@ -396,7 +406,7 @@ class SyncService {
 	}
 
 	public function findMap(int $id, string $userId): BoardMap {
-		$map = $this->boardMaps->find($id);
+		$map = $this->boardMaps->findById($id);
 		if ($map->getUserId() !== $userId) {
 			throw new DoesNotExistException('Not found');
 		}

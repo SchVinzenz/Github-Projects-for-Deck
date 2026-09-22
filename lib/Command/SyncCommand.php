@@ -29,7 +29,7 @@ class SyncCommand extends Command {
 		$sync = Server::get(SyncService::class);
 		$mapId = $input->getArgument('map-id');
 		if ($mapId !== null) {
-			$map = $maps->find((int)$mapId);
+			$map = $maps->findById((int)$mapId);
 			$stats = $sync->syncBoard($map);
 			$output->writeln(json_encode($stats));
 			return 0;

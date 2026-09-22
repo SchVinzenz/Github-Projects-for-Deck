@@ -21,9 +21,15 @@ class BoardMapMapper extends QBMapper {
 		parent::__construct($db, 'deckghs_boardmap', BoardMap::class);
 	}
 
-	/** @return BoardMap[] */
-	public function findByUser(string $userId): array {
+	public function findById(int $id): BoardMap {
 		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
+		return $this->findEntity($qb);
+	}
+
+	/** @return BoardMap[] */
+	public function findByUser(string $userId): array {		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)));
 		return $this->findEntities($qb);
