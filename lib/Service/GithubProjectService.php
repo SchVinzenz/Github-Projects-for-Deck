@@ -57,7 +57,7 @@ class GithubProjectService {
 	public function listItems(string $userId, string $projectId, ?string $after = null): array {
 		$q = 'query($pid:ID!,$after:String){ node(id:$pid){ ... on ProjectV2{
 			items(first:50, after:$after){ pageInfo{ hasNextPage endCursor }
-			nodes{ id updatedAt archivedAt
+			nodes{ id updatedAt
 				content{ __typename
 					... on DraftIssue{ id title body updatedAt }
 					... on Issue{ id number title body state closed url repository{nameWithOwner} assignees(first:10){nodes{login}} labels(first:10){nodes{name}} }
@@ -70,6 +70,10 @@ class GithubProjectService {
 				} }
 			} } } } }';
 		$res = $this->client->graphql($userId, $q, ['pid' => $projectId, 'after' => $after]);
+		if (($res['data']['node'] ?? null) === null) {
+			$msg = isset($res['errors']) ? (string)json_encode($res['errors']) : 'empty response';
+			throw new \RuntimeException('GitHub project query failed: ' . substr($msg, 0, 300));
+		}
 		$conn = $res['data']['node']['items'] ?? ['nodes' => [], 'pageInfo' => []];
 		return [
 			'items' => $conn['nodes'] ?? [],

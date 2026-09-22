@@ -21,7 +21,7 @@ Nextcloud Deck und GitHub Projects v2.
 | Assignee | via User-Mapping Tabelle | ✅ (ohne Mapping wird übersprungen) |
 | Kommentar | Issue-Comment (`[Deck]`/`[GitHub user]`) | ✅ |
 | Due | Date-Field (`dateFieldId`) | ✅ |
-| Archiv/Delete | Archiv/Delete | ✅ |
+| Archiv/Delete | nur per Webhook-Event (`deleted`/`archived`/`restored`), nie per Listen-Abwesenheit | ✅ |
 | PR | read-only Card | ✅ |
 | Anhang | — | TODO |
 

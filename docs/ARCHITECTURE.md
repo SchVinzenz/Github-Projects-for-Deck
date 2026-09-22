@@ -41,5 +41,7 @@ Deck (Board/Stack/Card)  <--DeckService-->  SyncService  <--GithubProjectService
 - **Kommentare**: Duplikat-geschützt, mit `[Deck]`- bzw. `[GitHub user]`-Präfix.
 - **Assignees**: Nur über explizites Nutzer-Mapping, sonst Skip.
 - **Pull Requests**: read-only (nur GitHub → Deck, markiert).
-- **Löschen/Archivieren**: GitHub-archiviert → Deck-Archiv; GitHub gelöscht →
-  Deck-Delete; Deck gelöscht → GitHub-Archiv.
+- **Löschen/Archivieren**: Nur auf explizite Webhook-Events
+  (`projects_v2_item` → `deleted`/`archived`/`restored`). Abwesenheit im
+  Listing löst **nie** Löschungen aus (kann ein partielles Listing bedeuten).
+  Neue Mappings verlinken titelgleiche Items/Karten statt Duplikate anzulegen.
