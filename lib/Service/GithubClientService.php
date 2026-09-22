@@ -1,0 +1,169 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * SPDX-FileCopyrightText: 2026 Nextcloud contributors
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+namespace OCA\DeckGithubSync\Service;
+
+use OCP\Http\Client\IClientService;
+use OCP\IConfig;
+use OCP\Security\ISecureRandom;
+use Psr\Log\LoggerInterface;
+
+/**
+ * Handles GitHub App JWT + installation tokens and GraphQL calls.
+ */
+class GithubClientService {
+	public const GRAPHQL_URL = 'https://api.github.com/graphql';
+	public const API_BASE = 'https://api.github.com';
+
+	public function __construct(
+		private IClientService $clientService,
+		private IConfig $config,
+		private ISecureRandom $random,
+		private LoggerInterface $logger,
+	) {
+	}
+
+	public function getAppId(): string {
+		return $this->config->getAppValue('deckgithubsync', 'github_app_id', '');
+	}
+
+	public function getInstallationId(string $userId): string {
+		// per-user installation override, fallback to global
+		$perUser = $this->config->getUserValue($userId, 'deckgithubsync', 'installation_id', '');
+		if ($perUser !== '') {
+			return $perUser;
+		}
+		return $this->config->getAppValue('deckgithubsync', 'github_installation_id', '');
+	}
+
+	public function getUserToken(string $userId): string {
+		return $this->config->getUserValue($userId, 'deckgithubsync', 'github_token', '');
+	}
+
+	private function base64Url(string $data): string {
+		return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+	}
+
+	/** Create RS256 JWT for GitHub App auth (10 min validity). */
+	public function createAppJwt(): string {
+		$appId = $this->getAppId();
+		$key = $this->config->getAppValue('deckgithubsync', 'github_private_key', '');
+		if ($appId === '' || $key === '') {
+			throw new \RuntimeException('GitHub App not configured');
+		}
+		$header = $this->base64Url((string)json_encode(['alg' => 'RS256', 'typ' => 'JWT']));
+		$now = time();
+		$payload = $this->base64Url((string)json_encode(['iat' => $now - 60, 'exp' => $now + 540, 'iss' => $appId]));
+		$pkey = openssl_pkey_get_private($key);
+		if ($pkey === false) {
+			throw new \RuntimeException('Invalid GitHub App private key');
+		}
+		$sig = '';
+		if (!openssl_sign("$header.$payload", $sig, $pkey, OPENSSL_ALGO_SHA256)) {
+			throw new \RuntimeException('JWT signing failed');
+		}
+		return "$header.$payload." . $this->base64Url($sig);
+	}
+
+	/** Fetch (and cache) an installation access token. */
+	public function getInstallationToken(string $userId): string {
+		$cacheKey = 'install_token_' . md5($userId . $this->getInstallationId($userId));
+		$cached = $this->config->getAppValue('deckgithubsync', $cacheKey, '');
+		$exp = (int)$this->config->getAppValue('deckgithubsync', $cacheKey . '_exp', '0');
+		if ($cached !== '' && $exp > time() + 120) {
+			return $cached;
+		}
+		$installationId = $this->getInstallationId($userId);
+		if ($installationId === '') {
+			// Fall back to user PAT (allows dev without GitHub App)
+			$pat = $this->getUserToken($userId);
+			if ($pat === '') {
+				throw new \RuntimeException('No GitHub installation or user token configured');
+			}
+			return $pat;
+		}
+		$client = $this->clientService->newClient();
+		$resp = $client->post(
+			self::API_BASE . '/app/installations/' . urlencode($installationId) . '/access_tokens',
+			[
+				'headers' => [
+					'Authorization' => 'Bearer ' . $this->createAppJwt(),
+					'Accept' => 'application/vnd.github+json',
+					'User-Agent' => 'Nextcloud-deckgithubsync',
+				],
+			]
+		);
+		$data = json_decode($resp->getBody(), true);
+		if (!isset($data['token'])) {
+			throw new \RuntimeException('Could not obtain installation token');
+		}
+		$this->config->setAppValue('deckgithubsync', $cacheKey, $data['token']);
+		$this->config->setAppValue('deckgithubsync', $cacheKey . '_exp', (string)(strtotime($data['expires_at'] ?? '+55 minutes')));
+		return $data['token'];
+	}
+
+	public function resolveToken(string $userId): string {
+		try {
+			return $this->getInstallationToken($userId);
+		} catch (\Throwable $e) {
+			$this->logger->debug('deckgithubsync: installation token failed, trying PAT', ['exception' => $e]);
+			return $this->getUserToken($userId);
+		}
+	}
+
+	/** Generic REST call, returns decoded JSON. @return array<string,mixed> */
+	public function rest(string $userId, string $method, string $path, array $payload = []): array {
+		$client = $this->clientService->newClient();
+		$options = [
+			'headers' => [
+				'Authorization' => 'Bearer ' . $this->resolveToken($userId),
+				'Accept' => 'application/vnd.github+json',
+				'Content-Type' => 'application/json',
+				'User-Agent' => 'Nextcloud-deckgithubsync',
+				'X-GitHub-Api-Version' => '2022-11-28',
+			],
+			'timeout' => 20,
+		];
+		if ($payload !== []) {
+			$options['body'] = json_encode($payload);
+		}
+		$url = self::API_BASE . $path;
+		$resp = match (strtoupper($method)) {
+			'GET' => $client->get($url, $options),
+			'POST' => $client->post($url, $options),
+			'PATCH' => $client->patch($url, $options),
+			'PUT' => $client->put($url, $options),
+			'DELETE' => $client->delete($url, $options),
+			default => throw new \InvalidArgumentException('Unsupported method ' . $method),
+		};
+		$decoded = json_decode($resp->getBody(), true);
+		return is_array($decoded) ? $decoded : [];
+	}
+
+	/** @return array{data?: array, errors?: array} */
+	public function graphql(string $userId, string $query, array $variables = []): array {		$client = $this->clientService->newClient();
+		$resp = $client->post(self::GRAPHQL_URL, [
+			'headers' => [
+				'Authorization' => 'Bearer ' . $this->resolveToken($userId),
+				'Content-Type' => 'application/json',
+				'User-Agent' => 'Nextcloud-deckgithubsync',
+			],
+			'body' => json_encode(['query' => $query, 'variables' => $variables]),
+			'timeout' => 20,
+		]);
+		$decoded = json_decode($resp->getBody(), true);
+		if (!is_array($decoded)) {
+			throw new \RuntimeException('Invalid GraphQL response');
+		}
+		if (isset($decoded['errors'])) {
+			$this->logger->warning('deckgithubsync GraphQL errors', ['errors' => $decoded['errors']]);
+		}
+		return $decoded;
+	}
+}
