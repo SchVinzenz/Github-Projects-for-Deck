@@ -21,7 +21,27 @@ class GithubProjectService {
 	) {
 	}
 
-	public function resolveProjectId(string $userId, string $owner, int $number, string $ownerType = 'organization'): ?string {
+	public function resolveProjectId(string $userId, string $owner, int $number, string $ownerType = 'auto'): ?string {
+		if ($ownerType === 'auto') {
+			$failure = null;
+			foreach (['user', 'organization'] as $type) {
+				try {
+					$id = $this->resolveProjectId($userId, $owner, $number, $type);
+					if ($id !== null) {
+						return $id;
+					}
+				} catch (\Throwable $e) {
+					$failure = $e;
+				}
+			}
+			if ($failure !== null) {
+				throw $failure;
+			}
+			return null;
+		}
+		if (!in_array($ownerType, ['user', 'organization'], true)) {
+			throw new \InvalidArgumentException('Invalid GitHub owner type');
+		}
 		$field = $ownerType === 'user' ? 'user' : 'organization';
 		$q = "query(\$login:String!,\$num:Int!){ $field(login:\$login){ projectV2(number:\$num){ id title } } }";
 		$res = $this->client->graphql($userId, $q, ['login' => $owner, 'num' => $number]);

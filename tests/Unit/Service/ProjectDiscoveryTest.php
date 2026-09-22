@@ -10,6 +10,36 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
 class ProjectDiscoveryTest extends TestCase {
+	public function testResolvesPersonalProjectWhenOrganizationLookupWouldFail(): void {
+		$client = $this->createMock(GithubClientService::class);
+		$client->expects($this->once())->method('graphql')
+			->willReturnCallback(static function (string $uid, string $query, array $variables): array {
+				self::assertSame('nextcloud-user', $uid);
+				self::assertStringContainsString('user(login:', $query);
+				self::assertSame(['login' => 'SchVinzenz', 'num' => 3], $variables);
+				return ['data' => ['user' => ['projectV2' => ['id' => 'P3']]]];
+			});
+		$service = new GithubProjectService($client, $this->createMock(LoggerInterface::class));
+		$this->assertSame('P3', $service->resolveProjectId('nextcloud-user', 'SchVinzenz', 3));
+	}
+
+	public function testResolvesOrganizationProjectAfterUserLookupFails(): void {
+		$client = $this->createMock(GithubClientService::class);
+		$calls = 0;
+		$client->expects($this->exactly(2))->method('graphql')
+			->willReturnCallback(static function (string $uid, string $query, array $variables) use (&$calls): array {
+				self::assertSame('team', $variables['login']);
+				if ($calls++ === 0) {
+					self::assertStringContainsString('user(login:', $query);
+					throw new \RuntimeException('GitHub GraphQL request failed: user not found');
+				}
+				self::assertStringContainsString('organization(login:', $query);
+				return ['data' => ['organization' => ['projectV2' => ['id' => 'P7']]]];
+			});
+		$service = new GithubProjectService($client, $this->createMock(LoggerInterface::class));
+		$this->assertSame('P7', $service->resolveProjectId('nextcloud-user', 'team', 7));
+	}
+
 	public function testListsUserAndOrganizationProjectsAcrossPages(): void {
 		$client = $this->createMock(GithubClientService::class);
 		$responses = [

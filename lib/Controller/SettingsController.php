@@ -57,10 +57,9 @@ class SettingsController extends Controller {
 			return new DataResponse(['error' => 'Deck-Board nicht gefunden oder kein Zugriff.'], Http::STATUS_BAD_REQUEST);
 		}
 		try {
-			$projectId = $this->projects->resolveProjectId($this->userId ?? '', $githubOwner, $githubNumber)
-				?? $this->projects->resolveProjectId($this->userId ?? '', $githubOwner, $githubNumber, 'user');
+			$projectId = $this->projects->resolveProjectId($this->userId ?? '', $githubOwner, $githubNumber);
 		} catch (\Throwable $e) {
-			return new DataResponse(['error' => 'GitHub ist nicht verbunden oder nicht erreichbar. Bitte zuerst GitHub verbinden.'], Http::STATUS_BAD_GATEWAY);
+			return new DataResponse(['error' => 'GitHub Project konnte nicht geprüft werden. Bitte Zugriff und Project-Berechtigungen prüfen.'], Http::STATUS_BAD_GATEWAY);
 		}
 		if ($projectId === null) {
 			return new DataResponse(['error' => 'GitHub project not found'], Http::STATUS_BAD_REQUEST);
