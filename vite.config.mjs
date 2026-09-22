@@ -13,8 +13,8 @@ export default defineConfig({
 				'deckgithubsync-personal': resolve(__dirname, 'src/personal.js'),
 			},
 			output: {
-				entryFileNames: '[name].js',
-				chunkFileNames: '[name]-[hash].js',
+				entryFileNames: '[name].mjs',
+				chunkFileNames: '[name]-[hash].mjs',
 				assetFileNames: '[name][extname]',
 			},
 		},

@@ -1,6 +1,7 @@
 <template>
 	<div class="deckghs-personal">
 		<h2>Board-Mappings</h2>
+		<p v-if="error" class="error">{{ error }}</p>
 		<div v-for="m in mappings" :key="m.id">
 			<span>Board {{ m.deckBoardId }} ↔ {{ m.githubOwner }}#{{ m.githubNumber }} ({{ m.direction }})</span>
 			<select v-model="m.direction" @change="update(m)">
@@ -37,11 +38,15 @@ import axios from '@nextcloud/axios'
 export default {
 	name: 'Personal',
 	data() {
-		return { mappings: [], form: { deckBoardId: 0, githubOwner: '', githubNumber: 0 } }
+		return { mappings: [], form: { deckBoardId: 0, githubOwner: '', githubNumber: 0 }, error: '' }
 	},
 	async mounted() {
-		const { data } = await axios.get('/index.php/apps/deckgithubsync/api/v1/mappings')
-		this.mappings = data
+		try {
+			const { data } = await axios.get('/index.php/apps/deckgithubsync/api/v1/mappings')
+			this.mappings = data
+		} catch (e) {
+			this.error = 'Mappings konnten nicht geladen werden.'
+		}
 	},
 	methods: {
 		async create() {

@@ -1,6 +1,8 @@
 <template>
 	<div class="deckghs-admin">
 		<h2>Deck ↔ GitHub Projects Sync</h2>
+		<p v-if="error" class="error">{{ error }}</p>
+		<p v-if="saved">Gespeichert.</p>
 		<label>GitHub App ID <input v-model="appId" /></label>
 		<label>Installation ID <input v-model="installationId" /></label>
 		<label>Sync-Intervall (s) <input v-model.number="interval" type="number" min="300" /></label>
@@ -15,7 +17,7 @@ import axios from '@nextcloud/axios'
 export default {
 	name: 'Admin',
 	data() {
-		return { appId: '', installationId: '', interval: 900 }
+		return { appId: '', installationId: '', interval: 900, error: '', saved: false }
 	},
 	computed: {
 		webhookUrl() {
@@ -23,18 +25,27 @@ export default {
 		},
 	},
 	async mounted() {
-		const { data } = await axios.get('/index.php/apps/deckgithubsync/api/v1/admin')
-		this.appId = data.github_app_id
-		this.installationId = data.github_installation_id
-		this.interval = data.sync_interval
+		try {
+			const { data } = await axios.get('/index.php/apps/deckgithubsync/api/v1/admin')
+			this.appId = data.github_app_id
+			this.installationId = data.github_installation_id
+			this.interval = data.sync_interval
+		} catch (e) {
+			this.error = 'Konfiguration konnte nicht geladen werden.'
+		}
 	},
 	methods: {
 		async save() {
-			await axios.put('/index.php/apps/deckgithubsync/api/v1/admin', {
-				githubAppId: this.appId,
-				githubInstallationId: this.installationId,
-				syncInterval: this.interval,
-			})
+			try {
+				await axios.put('/index.php/apps/deckgithubsync/api/v1/admin', {
+					githubAppId: this.appId,
+					githubInstallationId: this.installationId,
+					syncInterval: this.interval,
+				})
+				this.saved = true
+			} catch (e) {
+				this.error = 'Speichern fehlgeschlagen.'
+			}
 		},
 	},
 }
