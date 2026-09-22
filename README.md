@@ -3,9 +3,10 @@
 Bidirektionale, pro Board und pro Feld konfigurierbare Synchronisation zwischen
 Nextcloud Deck und GitHub Projects v2.
 
-## Stand (0.4.2)
+## Stand (0.4.3)
 
 - OAuth-Login per Klick (+ PAT-Fallback), Token-Status, Boards-Dropdown
+- GitHub-Projects-Auswahl für eigenes Konto und Organisationen, mit manueller Eingabe als Ausweichmöglichkeit
 - Redesignte Admin-/Personal-Einstellungen (nativ, `.mjs`-Module)
 - Sync: beide Richtungen für Anlage + Update, Last-Write-Wins, getrennte
   `deck_hash`/`github_hash` (idempotent, konvergiert), Titel-Dedup,

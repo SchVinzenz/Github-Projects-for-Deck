@@ -82,6 +82,7 @@
 
 		<section class="deckghs-card">
 			<h2>Neues Mapping</h2>
+			<p class="deckghs-muted">Wähle ein Deck-Board und ein GitHub Project. GitHub-Repositories sind keine Project-Mappings.</p>
 			<div class="deckghs-row">
 				<label>Deck-Board
 					<select v-model.number="form.deckBoardId">
@@ -89,8 +90,16 @@
 						<option v-for="b in boards" :key="b.id" :value="b.id">{{ b.title }}</option>
 					</select>
 				</label>
-				<label>Owner <input v-model="form.githubOwner" placeholder="z. B. meine-org" /></label>
-				<label>Project-Nr. <input v-model.number="form.githubNumber" type="number" min="1" /></label>
+				<label v-if="projectMode === 'select'">GitHub Project
+					<select v-model="selectedProjectId" :disabled="projectsLoading || !status.connected">
+						<option value="" disabled>{{ projectsLoading ? 'Lade Projects …' : 'Bitte wählen …' }}</option>
+						<option v-for="p in projects" :key="p.id" :value="p.id">{{ p.owner }} / {{ p.title }} (#{{ p.number }})</option>
+					</select>
+				</label>
+				<template v-else>
+					<label>Owner <input v-model="form.githubOwner" placeholder="z. B. meine-org" /></label>
+					<label>Project-Nr. <input v-model.number="form.githubNumber" type="number" min="1" /></label>
+				</template>
 				<label>Richtung
 					<select v-model="form.direction">
 						<option value="both">Bidirektional</option>
@@ -99,6 +108,11 @@
 					</select>
 				</label>
 				<button class="deckghs-btn primary" :disabled="!canCreate" @click="create">Anlegen</button>
+			</div>
+			<p v-if="projectError" class="deckghs-note deckghs-note-warn">{{ projectError }}</p>
+			<div class="deckghs-row">
+				<button v-if="projectMode === 'select' && status.connected" class="deckghs-btn" :disabled="projectsLoading" @click="loadProjects">Projects aktualisieren</button>
+				<button class="deckghs-btn" @click="projectMode = projectMode === 'select' ? 'manual' : 'select'">{{ projectMode === 'select' ? 'Project manuell eingeben' : 'Zur Project-Auswahl' }}</button>
 			</div>
 		</section>
 	</div>
@@ -116,6 +130,11 @@ export default {
 			loading: true,
 			mappings: [],
 			boards: [],
+			projects: [],
+			projectsLoading: false,
+			projectError: '',
+			projectMode: 'select',
+			selectedProjectId: '',
 			status: { connected: false, oauth: false },
 			pat: '',
 			form: { deckBoardId: 0, githubOwner: '', githubNumber: null, direction: 'both' },
@@ -127,7 +146,9 @@ export default {
 	},
 	computed: {
 		canCreate() {
-			return this.form.deckBoardId > 0 && this.form.githubOwner.trim() !== '' && (this.form.githubNumber || 0) > 0
+			return this.form.deckBoardId > 0 && (this.projectMode === 'select'
+				? this.projects.some((p) => p.id === this.selectedProjectId)
+				: this.form.githubOwner.trim() !== '' && (this.form.githubNumber || 0) > 0)
 		},
 	},
 	async mounted() {
@@ -146,6 +167,9 @@ export default {
 			this.mappings = Array.isArray(maps.data) ? maps.data : []
 			this.boards = Array.isArray(boards.data) ? boards.data : []
 			this.status = status.data
+			if (this.status.connected) {
+				await this.loadProjects()
+			}
 		} catch (e) {
 			this.error = 'Daten konnten nicht geladen werden.'
 		} finally {
@@ -153,6 +177,26 @@ export default {
 		}
 	},
 	methods: {
+		async loadProjects() {
+			this.projectsLoading = true
+			this.projectError = ''
+			try {
+				const { data } = await axios.get('/index.php/apps/deckgithubsync/api/v1/github/projects')
+				this.projects = Array.isArray(data) ? data : []
+				if (!this.projects.some((p) => p.id === this.selectedProjectId)) {
+					this.selectedProjectId = ''
+				}
+				if (!this.projects.length) {
+					this.projectError = 'Keine Projects gefunden. Prüfe die GitHub-Berechtigungen oder gib das Project manuell ein.'
+				}
+			} catch (e) {
+				this.projects = []
+				this.selectedProjectId = ''
+				this.projectError = e.response?.data?.error || 'Projects konnten nicht geladen werden. Du kannst sie manuell eingeben.'
+			} finally {
+				this.projectsLoading = false
+			}
+		},
 		boardTitle(id) {
 			return (this.boards.find((b) => b.id === id) || {}).title || ('Board ' + id)
 		},
@@ -162,9 +206,14 @@ export default {
 		async create() {
 			this.error = ''
 			try {
-				const { data } = await axios.post('/index.php/apps/deckgithubsync/api/v1/mappings', this.form)
+				const selected = this.projects.find((p) => p.id === this.selectedProjectId)
+				const payload = this.projectMode === 'select'
+					? { ...this.form, githubOwner: selected.owner, githubNumber: selected.number }
+					: this.form
+				const { data } = await axios.post('/index.php/apps/deckgithubsync/api/v1/mappings', payload)
 				this.mappings.push(data)
 				this.form = { deckBoardId: 0, githubOwner: '', githubNumber: null, direction: 'both' }
+				this.selectedProjectId = ''
 			} catch (e) {
 				this.error = e.response?.data?.error || 'Mapping konnte nicht angelegt werden (GitHub-Project prüfen).'
 			}
@@ -220,6 +269,7 @@ export default {
 				this.status = { connected: true, login: data.login, oauth: this.status.oauth }
 				this.pat = ''
 				this.notice = 'Token gespeichert.'
+				await this.loadProjects()
 			} catch (e) {
 				this.error = e.response?.data?.error || 'Token ungültig.'
 			}
@@ -227,6 +277,9 @@ export default {
 		async disconnect() {
 			await axios.delete('/index.php/apps/deckgithubsync/api/v1/github/token')
 			this.status = { connected: false, oauth: this.status.oauth }
+			this.projects = []
+			this.selectedProjectId = ''
+			this.projectError = ''
 		},
 	},
 }

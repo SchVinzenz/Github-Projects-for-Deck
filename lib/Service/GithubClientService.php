@@ -205,11 +205,15 @@ class GithubClientService {
 	}
 
 	/** @return array{data?: array, errors?: array} */
-	public function graphql(string $userId, string $query, array $variables = []): array {
+	public function graphql(string $userId, string $query, array $variables = [], bool $asUser = false): array {
 		$client = $this->clientService->newClient();
+		$userToken = $asUser ? $this->getUserToken($userId) : '';
+		if ($asUser && $userToken === '') {
+			throw new \RuntimeException('Connect a GitHub user account to list projects');
+		}
 		$resp = $client->post(self::GRAPHQL_URL, [
 			'headers' => [
-				'Authorization' => 'Bearer ' . $this->resolveToken($userId),
+				'Authorization' => 'Bearer ' . ($asUser ? $userToken : $this->resolveToken($userId)),
 				'Content-Type' => 'application/json',
 				'User-Agent' => 'Nextcloud-deckgithubsync',
 			],

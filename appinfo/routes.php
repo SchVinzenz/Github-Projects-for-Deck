@@ -17,6 +17,7 @@ return [
 		['name' => 'settings#deleteMapping', 'url' => '/api/v1/mappings/{id}', 'verb' => 'DELETE'],
 		['name' => 'settings#setUserMap', 'url' => '/api/v1/mappings/{id}/users', 'verb' => 'PUT'],
 		['name' => 'settings#listBoards', 'url' => '/api/v1/deck/boards', 'verb' => 'GET'],
+		['name' => 'settings#listProjects', 'url' => '/api/v1/github/projects', 'verb' => 'GET'],
 		['name' => 'settings#githubStatus', 'url' => '/api/v1/github/status', 'verb' => 'GET'],
 		['name' => 'settings#setUserToken', 'url' => '/api/v1/github/token', 'verb' => 'PUT'],
 		['name' => 'settings#disconnectGithub', 'url' => '/api/v1/github/token', 'verb' => 'DELETE'],

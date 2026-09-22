@@ -26,10 +26,10 @@ use Psr\Log\LoggerInterface;
  * GitHub OAuth (user login) flow.
  *
  * Requires a GitHub OAuth App configured by the admin (client id + secret).
- * Scopes: read:user, repo, project.
+ * Scopes: read:user, repo, project, read:org.
  */
 class OAuthController extends Controller {
-	private const SCOPES = 'read:user,repo,project';
+	private const SCOPES = 'read:user repo project read:org';
 	private const AUTHORIZE_URL = 'https://github.com/login/oauth/authorize';
 
 	public function __construct(

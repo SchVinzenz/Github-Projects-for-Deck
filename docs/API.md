@@ -17,6 +17,7 @@ Basis: `/index.php/apps/deckgithubsync`, Auth: Nextcloud-Session (+ CSRF).
 | Methode | Pfad | Beschreibung |
 |---|---|---|
 | GET | `/api/v1/deck/boards` | Eigene Deck-Boards (`id`, `title`) für Dropdowns |
+| GET | `/api/v1/github/projects` | Projects des verbundenen GitHub-Nutzers und seiner Organisationen (`id`, `owner`, `number`, `title`, `url`) |
 | GET | `/api/v1/github/status` | `{connected, login?, invalid?, oauth}` |
 | PUT | `/api/v1/github/token` | PAT prüfen + speichern |
 | DELETE | `/api/v1/github/token` | Verbindung trennen |

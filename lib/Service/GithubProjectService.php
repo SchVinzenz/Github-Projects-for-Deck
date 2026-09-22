@@ -28,6 +28,63 @@ class GithubProjectService {
 		return $res['data'][$field]['projectV2']['id'] ?? null;
 	}
 
+	/** Projects owned by the connected user and their organizations. */
+	public function listAvailableProjects(string $userId): array {
+		$owners = [];
+		$after = null;
+		do {
+			$q = 'query($after:String){ viewer{ login organizations(first:100,after:$after){ nodes{login} pageInfo{hasNextPage endCursor} } } }';
+			$res = $this->client->graphql($userId, $q, ['after' => $after], true);
+			$viewer = $res['data']['viewer'] ?? null;
+			if (!is_array($viewer) || empty($viewer['login'])) {
+				throw new \RuntimeException('GitHub user projects could not be listed');
+			}
+			$owners['user:' . strtolower($viewer['login'])] = ['type' => 'user', 'login' => $viewer['login']];
+			$organizations = $viewer['organizations'] ?? [];
+			foreach ($organizations['nodes'] ?? [] as $org) {
+				if (!empty($org['login'])) {
+					$owners['organization:' . strtolower($org['login'])] = ['type' => 'organization', 'login' => $org['login']];
+				}
+			}
+			$after = ($organizations['pageInfo']['hasNextPage'] ?? false) ? ($organizations['pageInfo']['endCursor'] ?? null) : null;
+			if (($organizations['pageInfo']['hasNextPage'] ?? false) && $after === null) {
+				throw new \RuntimeException('GitHub organization pagination failed');
+			}
+		} while ($after !== null);
+
+		$projects = [];
+		foreach ($owners as $owner) {
+			$field = $owner['type'] === 'user' ? 'user' : 'organization';
+			$after = null;
+			do {
+				$q = "query(\$login:String!,\$after:String){ $field(login:\$login){ projectsV2(first:100,after:\$after){ nodes{id number title url} pageInfo{hasNextPage endCursor} } } }";
+				$res = $this->client->graphql($userId, $q, ['login' => $owner['login'], 'after' => $after], true);
+				$connection = $res['data'][$field]['projectsV2'] ?? null;
+				if (!is_array($connection)) {
+					throw new \RuntimeException('GitHub projects could not be listed for ' . $owner['login']);
+				}
+				foreach ($connection['nodes'] ?? [] as $project) {
+					if (!empty($project['id']) && isset($project['number'], $project['title'])) {
+						$projects[$project['id']] = [
+							'id' => $project['id'],
+							'owner' => $owner['login'],
+							'number' => (int)$project['number'],
+							'title' => $project['title'],
+							'url' => $project['url'] ?? '',
+						];
+					}
+				}
+				$after = ($connection['pageInfo']['hasNextPage'] ?? false) ? ($connection['pageInfo']['endCursor'] ?? null) : null;
+				if (($connection['pageInfo']['hasNextPage'] ?? false) && $after === null) {
+					throw new \RuntimeException('GitHub project pagination failed');
+				}
+			} while ($after !== null);
+		}
+		$projects = array_values($projects);
+		usort($projects, static fn (array $a, array $b) => strcasecmp($a['owner'] . '/' . $a['title'], $b['owner'] . '/' . $b['title']));
+		return $projects;
+	}
+
 	/** @return array{fields: array, statusFieldId: string, dateFieldId: string, options: array} */
 	public function getFields(string $userId, string $projectId): array {
 		$q = 'query($pid:ID!){ node(id:$pid){ ... on ProjectV2{ fields(first:50){ nodes{

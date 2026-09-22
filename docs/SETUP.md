@@ -47,6 +47,8 @@ npm ci && npm run build
    Client ID + Client Secret eintragen, speichern.
 2. Nutzer: **Persönliche Einstellungen → Deck ↔ GitHub Projects** →
    *Mit GitHub verbinden* klicken, auf GitHub bestätigen, fertig.
+   Bereits verbundene Nutzer sollten sich für die Organisationserkennung
+   erneut verbinden, damit der zusätzliche `read:org`-Scope erteilt wird.
 
 Alternative ohne OAuth App: Personal Access Token (fine-grained, Scopes
 `Projects: Read & Write`, `Issues: Read & Write`) im selben Formular eintragen.
@@ -60,8 +62,10 @@ auch ohne Nutzer-Token über Cron.
 
 ## Mapping anlegen
 
-Persönliche Einstellungen → *Neues Mapping*: Deck-Board wählen, GitHub-Owner
-und Project-Nummer eintragen, Richtung wählen, anlegen. Danach optional pro
+Persönliche Einstellungen → *Neues Mapping*: Deck-Board und ein automatisch
+geladenes GitHub Project wählen, Richtung wählen, anlegen. Falls ein Project
+nicht in der Liste erscheint, können Owner und Project-Nummer weiter manuell
+eingegeben werden. Danach optional pro
 Feld (Titel, Beschreibung, Status, Labels, Assignees, Fälligkeit, Kommentare)
 die Richtung feintunen sowie GitHub-Logins auf Deck-Benutzer mappen.
 

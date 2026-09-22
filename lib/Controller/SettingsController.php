@@ -164,6 +164,18 @@ class SettingsController extends Controller {
 		}
 	}
 
+	#[NoAdminRequired]
+	public function listProjects(): DataResponse {
+		try {
+			return new DataResponse($this->projects->listAvailableProjects($this->userId ?? ''));
+		} catch (\Throwable $e) {
+			$message = str_contains($e->getMessage(), 'INSUFFICIENT_SCOPES')
+				? 'GitHub-Token benötigt Project-Leserechte. Bei OAuth bitte erneut verbinden.'
+				: 'GitHub Projects konnten nicht geladen werden. Verbindung und Berechtigungen prüfen.';
+			return new DataResponse(['error' => $message], Http::STATUS_BAD_GATEWAY);
+		}
+	}
+
 	/** @NoAdminRequired */
 	public function githubStatus(): DataResponse {
 		$oauth = $this->config->getAppValue('deckgithubsync', 'oauth_client_id', '') !== '';
