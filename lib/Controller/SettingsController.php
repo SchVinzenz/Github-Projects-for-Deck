@@ -51,12 +51,20 @@ class SettingsController extends Controller {
 		if (!in_array($direction, ['both', 'deck_to_github', 'github_to_deck'], true)) {
 			return new DataResponse(['error' => 'Invalid direction'], Http::STATUS_BAD_REQUEST);
 		}
-		$projectId = $this->projects->resolveProjectId($this->userId ?? '', $githubOwner, $githubNumber)
-			?? $this->projects->resolveProjectId($this->userId ?? '', $githubOwner, $githubNumber, 'user');
+		try {
+			$projectId = $this->projects->resolveProjectId($this->userId ?? '', $githubOwner, $githubNumber)
+				?? $this->projects->resolveProjectId($this->userId ?? '', $githubOwner, $githubNumber, 'user');
+		} catch (\Throwable $e) {
+			return new DataResponse(['error' => 'GitHub ist nicht verbunden oder nicht erreichbar. Bitte zuerst GitHub verbinden.'], Http::STATUS_BAD_GATEWAY);
+		}
 		if ($projectId === null) {
 			return new DataResponse(['error' => 'GitHub project not found'], Http::STATUS_BAD_REQUEST);
 		}
-		$fields = $this->projects->getFields($this->userId ?? '', $projectId);
+		try {
+			$fields = $this->projects->getFields($this->userId ?? '', $projectId);
+		} catch (\Throwable $e) {
+			return new DataResponse(['error' => 'GitHub-Project konnte nicht gelesen werden.'], Http::STATUS_BAD_GATEWAY);
+		}
 		$map = new BoardMap();
 		$map->setUserId($this->userId ?? '');
 		$map->setDeckBoardId($deckBoardId);
