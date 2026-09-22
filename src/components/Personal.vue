@@ -13,15 +13,15 @@
 					<strong v-else>Nicht verbunden</strong>
 					<p class="deckghs-muted">
 						<span v-if="status.connected">Sync und Board-Zugriff laufen über dieses Konto.</span>
-						<span v-else>Verbinde dein GitHub-Konto, damit Boards synchronisiert werden können.</span>
+						<span v-else>{{ status.reason || 'Verbinde dein GitHub-Konto, damit Boards synchronisiert werden können.' }}</span>
 					</p>
 				</div>
 				<div class="deckghs-actions">
-					<a v-if="!status.connected && status.oauth" class="deckghs-btn primary" href="/index.php/apps/deckgithubsync/oauth/start">Mit GitHub verbinden</a>
+					<a v-if="!status.connected && status.oauth" class="deckghs-btn primary" :href="apiUrl('/oauth/start')">Mit GitHub verbinden</a>
 					<button v-if="status.connected" class="deckghs-btn" @click="disconnect">Trennen</button>
 				</div>
-			</div>
-			<details v-if="!status.connected" class="deckghs-pat">
+				</div>
+				<details v-if="!status.connected" class="deckghs-pat">
 				<summary>Alternativ: Personal Access Token eintragen</summary>
 				<p class="deckghs-muted">Fine-grained Token mit <code>Projects: Read &amp; Write</code> und <code>Issues: Read &amp; Write</code>.</p>
 				<div class="deckghs-row">
@@ -77,6 +77,7 @@
 						<button class="deckghs-btn primary" @click="saveUsers(m)">Nutzer-Mapping speichern</button>
 					</div>
 				</details>
+				<p v-if="!loading && !status.connected && !status.oauth" class="deckghs-muted">Für die Anmeldung per Klick muss ein Admin einmalig eine GitHub OAuth App in den Admin-Einstellungen einrichten.</p>
 			</article>
 		</section>
 
@@ -120,8 +121,20 @@
 
 <script>
 import axios from '@nextcloud/axios'
+import { generateUrl } from '@nextcloud/router'
 
 const DIRS = { both: 'Bidirektional', deck_to_github: 'Deck → GitHub', github_to_deck: 'GitHub → Deck' }
+const OAUTH_ERRORS = {
+	no_oauth_app: 'GitHub OAuth ist noch nicht vollständig eingerichtet. Client ID und Client Secret in den Admin-Einstellungen prüfen.',
+	invalid_state: 'Die Anmeldung konnte deiner Nextcloud-Sitzung nicht zugeordnet werden. Bitte erneut starten und Cookies zulassen.',
+	exchange_failed: 'GitHub konnte den Anmeldecode nicht einlösen. Client ID, Client Secret und Callback-URL prüfen.',
+	incorrect_client_credentials: 'Client ID oder Client Secret der GitHub OAuth App sind falsch. Bitte den Admin informieren.',
+	redirect_uri_mismatch: 'Die GitHub-Callback-URL stimmt nicht mit der URL in den Admin-Einstellungen überein.',
+	bad_verification_code: 'Der GitHub-Anmeldecode ist abgelaufen oder ungültig. Bitte erneut verbinden.',
+	unverified_user_email: 'Bitte zuerst die primäre E-Mail-Adresse deines GitHub-Kontos bestätigen.',
+	access_denied: 'Die GitHub-Anmeldung wurde abgebrochen.',
+}
+const apiUrl = (path) => generateUrl('/apps/deckgithubsync' + path)
 
 export default {
 	name: 'Personal',
@@ -156,13 +169,13 @@ export default {
 		if (q.get('gh_connected')) {
 			this.notice = 'GitHub erfolgreich verbunden.'
 		} else if (q.get('gh_error')) {
-			this.error = 'GitHub-Verbindung fehlgeschlagen (' + q.get('gh_error') + ').'
+			this.error = OAUTH_ERRORS[q.get('gh_error')] || 'GitHub-Verbindung fehlgeschlagen.'
 		}
 		try {
 			const [maps, boards, status] = await Promise.all([
-				axios.get('/index.php/apps/deckgithubsync/api/v1/mappings'),
-				axios.get('/index.php/apps/deckgithubsync/api/v1/deck/boards'),
-				axios.get('/index.php/apps/deckgithubsync/api/v1/github/status'),
+				axios.get(apiUrl('/api/v1/mappings')),
+				axios.get(apiUrl('/api/v1/deck/boards')),
+				axios.get(apiUrl('/api/v1/github/status')),
 			])
 			this.mappings = Array.isArray(maps.data) ? maps.data : []
 			this.boards = Array.isArray(boards.data) ? boards.data : []
@@ -177,11 +190,12 @@ export default {
 		}
 	},
 	methods: {
+		apiUrl,
 		async loadProjects() {
 			this.projectsLoading = true
 			this.projectError = ''
 			try {
-				const { data } = await axios.get('/index.php/apps/deckgithubsync/api/v1/github/projects')
+				const { data } = await axios.get(apiUrl('/api/v1/github/projects'))
 				this.projects = Array.isArray(data) ? data : []
 				if (!this.projects.some((p) => p.id === this.selectedProjectId)) {
 					this.selectedProjectId = ''
@@ -210,7 +224,7 @@ export default {
 				const payload = this.projectMode === 'select'
 					? { ...this.form, githubOwner: selected.owner, githubNumber: selected.number }
 					: this.form
-				const { data } = await axios.post('/index.php/apps/deckgithubsync/api/v1/mappings', payload)
+				const { data } = await axios.post(apiUrl('/api/v1/mappings'), payload)
 				this.mappings.push(data)
 				this.form = { deckBoardId: 0, githubOwner: '', githubNumber: null, direction: 'both' }
 				this.selectedProjectId = ''
@@ -220,7 +234,7 @@ export default {
 		},
 		async update(m) {
 			try {
-				await axios.put(`/index.php/apps/deckgithubsync/api/v1/mappings/${m.id}`, {
+				await axios.put(apiUrl(`/api/v1/mappings/${m.id}`), {
 					direction: m.direction,
 					fieldConfig: m.fieldConfig,
 				})
@@ -230,7 +244,7 @@ export default {
 		},
 		async saveUsers(m) {
 			try {
-				const { data } = await axios.put(`/index.php/apps/deckgithubsync/api/v1/mappings/${m.id}/users`, {
+				const { data } = await axios.put(apiUrl(`/api/v1/mappings/${m.id}/users`), {
 					users: m.userMap.filter((u) => u.githubLogin && u.deckUid),
 				})
 				m.userMap = data.userMap
@@ -243,13 +257,13 @@ export default {
 			if (!window.confirm('Mapping wirklich löschen?')) {
 				return
 			}
-			await axios.delete(`/index.php/apps/deckgithubsync/api/v1/mappings/${m.id}`)
+			await axios.delete(apiUrl(`/api/v1/mappings/${m.id}`))
 			this.mappings = this.mappings.filter((x) => x.id !== m.id)
 		},
 		async sync(m) {
 			this.syncing[m.id] = true
 			try {
-				const { data } = await axios.post(`/index.php/apps/deckgithubsync/api/v1/sync/${m.id}`)
+				const { data } = await axios.post(apiUrl(`/api/v1/sync/${m.id}`))
 				const errs = (data.errors || []).length
 				this.results[m.id] = `Deck→GitHub: ${data.deck_to_github}, GitHub→Deck: ${data.github_to_deck}` + (errs ? `, Fehler: ${errs}` : '')
 				m.lastSync = Math.floor(Date.now() / 1000)
@@ -265,17 +279,22 @@ export default {
 		async savePat() {
 			this.error = ''
 			try {
-				const { data } = await axios.put('/index.php/apps/deckgithubsync/api/v1/github/token', { token: this.pat })
+				const { data } = await axios.put(apiUrl('/api/v1/github/token'), { token: this.pat })
 				this.status = { connected: true, login: data.login, oauth: this.status.oauth }
 				this.pat = ''
 				this.notice = 'Token gespeichert.'
 				await this.loadProjects()
 			} catch (e) {
-				this.error = e.response?.data?.error || 'Token ungültig.'
+				const status = e.response?.status
+				this.error = e.response?.data?.error
+					|| (status === 403 ? 'Nextcloud hat die Anfrage abgelehnt (403). Bitte neu anmelden und erneut versuchen.'
+						: status === 404 ? 'Der Token-Endpunkt wurde nicht gefunden (404). Bitte die App aktualisieren.'
+							: status ? `Token konnte nicht gespeichert werden (HTTP ${status}).`
+								: 'Nextcloud ist nicht erreichbar. Bitte Verbindung prüfen.')
 			}
 		},
 		async disconnect() {
-			await axios.delete('/index.php/apps/deckgithubsync/api/v1/github/token')
+			await axios.delete(apiUrl('/api/v1/github/token'))
 			this.status = { connected: false, oauth: this.status.oauth }
 			this.projects = []
 			this.selectedProjectId = ''

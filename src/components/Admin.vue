@@ -21,12 +21,14 @@
 
 		<section class="deckghs-card">
 			<h2>GitHub OAuth <span class="deckghs-muted">(Login für Nutzer)</span></h2>
+			<p class="deckghs-muted">Einmal hier einrichten. Danach verbindet jeder Nextcloud-Benutzer sein eigenes GitHub-Konto in den persönlichen Einstellungen.</p>
 			<p class="deckghs-muted">OAuth App unter GitHub → Settings → Developer settings anlegen. Authorization callback URL:</p>
 			<p><code class="deckghs-code">{{ form.oauthCallbackUrl }}</code></p>
 			<div class="deckghs-grid">
 				<label>Client ID <input v-model="form.oauthClientId" autocomplete="off" /></label>
 				<label>Client Secret <input v-model="form.oauthClientSecret" type="password" autocomplete="off" placeholder="Nur beim Ändern einfügen" /></label>
 			</div>
+			<p class="deckghs-muted">Client Secret: {{ hasOauthSecret ? 'gespeichert' : 'noch nicht gespeichert' }}. Die Callback-URL muss mit dem Eintrag bei GitHub übereinstimmen.</p>
 		</section>
 
 		<button class="deckghs-btn primary big" :disabled="saving" @click="save">{{ saving ? 'Speichert …' : 'Speichern' }}</button>
@@ -35,6 +37,9 @@
 
 <script>
 import axios from '@nextcloud/axios'
+import { generateUrl } from '@nextcloud/router'
+
+const apiUrl = (path) => generateUrl('/apps/deckgithubsync' + path)
 
 export default {
 	name: 'Admin',
@@ -46,18 +51,20 @@ export default {
 				oauthClientId: '', oauthClientSecret: '', oauthCallbackUrl: '',
 			},
 			saving: false,
+			hasOauthSecret: false,
 			notice: '',
 			error: '',
 		}
 	},
 	async mounted() {
 		try {
-			const { data } = await axios.get('/index.php/apps/deckgithubsync/api/v1/admin')
+			const { data } = await axios.get(apiUrl('/api/v1/admin'))
 			this.form.githubAppId = data.github_app_id
 			this.form.githubInstallationId = data.github_installation_id
 			this.form.syncInterval = data.sync_interval
 			this.form.oauthClientId = data.oauth_client_id
 			this.form.oauthCallbackUrl = data.oauth_callback_url
+			this.hasOauthSecret = data.has_oauth_secret
 		} catch (e) {
 			this.error = 'Konfiguration konnte nicht geladen werden.'
 		}
@@ -68,7 +75,7 @@ export default {
 			this.error = ''
 			this.notice = ''
 			try {
-				await axios.put('/index.php/apps/deckgithubsync/api/v1/admin', {
+				const { data } = await axios.put(apiUrl('/api/v1/admin'), {
 					githubAppId: this.form.githubAppId,
 					githubInstallationId: this.form.githubInstallationId,
 					githubPrivateKey: this.form.githubPrivateKey,
@@ -79,6 +86,7 @@ export default {
 				})
 				this.form.githubPrivateKey = ''
 				this.form.oauthClientSecret = ''
+				this.hasOauthSecret = data.has_oauth_secret
 				this.notice = 'Gespeichert.'
 			} catch (e) {
 				this.error = 'Speichern fehlgeschlagen.'

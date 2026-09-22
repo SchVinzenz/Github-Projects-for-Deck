@@ -46,11 +46,15 @@ class GithubClientService {
 
 	public function setUserToken(string $userId, string $token): void {
 		$this->config->setUserValue($userId, 'deckgithubsync', 'github_token', $token);
+		$this->config->deleteUserValue($userId, 'deckgithubsync', 'github_refresh_token');
+		$this->config->deleteUserValue($userId, 'deckgithubsync', 'github_token_expires_at');
 	}
 
 	public function clearUserToken(string $userId): void {
 		$this->config->deleteUserValue($userId, 'deckgithubsync', 'github_token');
 		$this->config->deleteUserValue($userId, 'deckgithubsync', 'github_login');
+		$this->config->deleteUserValue($userId, 'deckgithubsync', 'github_refresh_token');
+		$this->config->deleteUserValue($userId, 'deckgithubsync', 'github_token_expires_at');
 	}
 
 	public function getStoredLogin(string $userId): string {
@@ -62,28 +66,82 @@ class GithubClientService {
 	}
 
 	/** Exchange an OAuth authorize code for a user access token. */
-	public function exchangeOAuthCode(string $clientId, string $clientSecret, string $code): string {
+	public function exchangeOAuthCode(string $clientId, string $clientSecret, string $code, string $redirectUri): array {
+		return $this->requestOAuthToken([
+			'client_id' => $clientId,
+			'client_secret' => $clientSecret,
+			'code' => $code,
+			'redirect_uri' => $redirectUri,
+		]);
+	}
+
+	private function requestOAuthToken(array $fields): array {
 		$client = $this->clientService->newClient();
 		$resp = $client->post('https://github.com/login/oauth/access_token', [
-			'headers' => ['Accept' => 'application/json', 'User-Agent' => 'Nextcloud-deckgithubsync'],
-			'body' => json_encode([
-				'client_id' => $clientId,
-				'client_secret' => $clientSecret,
-				'code' => $code,
-			]),
+			'headers' => [
+				'Accept' => 'application/json',
+				'Content-Type' => 'application/x-www-form-urlencoded',
+				'User-Agent' => 'Nextcloud-deckgithubsync',
+			],
+			'body' => http_build_query($fields),
 			'timeout' => 20,
 		]);
 		$data = json_decode($resp->getBody(), true);
 		if (!is_array($data) || empty($data['access_token'])) {
-			throw new \RuntimeException('GitHub OAuth exchange failed: ' . ($data['error_description'] ?? $data['error'] ?? 'unknown'));
+			$error = is_array($data) && is_string($data['error'] ?? null) ? $data['error'] : 'invalid_response';
+			throw new \RuntimeException('GitHub OAuth exchange failed: ' . $error);
 		}
-		return $data['access_token'];
+		return $data;
 	}
 
-	/** Validate a raw token and return the GitHub login, or null. */
-	public function getTokenLogin(string $token): ?string {
-		$client = $this->clientService->newClient();
+	public function storeOAuthToken(string $userId, array $data): void {
+		$this->setUserToken($userId, (string)$data['access_token']);
+		if (!empty($data['refresh_token'])) {
+			$this->config->setUserValue($userId, 'deckgithubsync', 'github_refresh_token', (string)$data['refresh_token']);
+		}
+		if (!empty($data['expires_in'])) {
+			$this->config->setUserValue($userId, 'deckgithubsync', 'github_token_expires_at', (string)(time() + max(1, (int)$data['expires_in'])));
+		}
+	}
+
+	public function getUserAccessToken(string $userId): string {
+		$token = $this->getUserToken($userId);
+		if ($token === '') {
+			return '';
+		}
+		$expiresAt = (int)$this->config->getUserValue($userId, 'deckgithubsync', 'github_token_expires_at', '0');
+		if ($expiresAt === 0 || $expiresAt > time() + 120) {
+			return $token;
+		}
+		$refreshToken = $this->config->getUserValue($userId, 'deckgithubsync', 'github_refresh_token', '');
+		$clientId = $this->config->getAppValue('deckgithubsync', 'oauth_client_id', '');
+		$clientSecret = $this->config->getAppValue('deckgithubsync', 'oauth_client_secret', '');
+		if ($refreshToken === '' || $clientId === '' || $clientSecret === '') {
+			throw new \RuntimeException('GitHub OAuth session expired; reconnect');
+		}
 		try {
+			$data = $this->requestOAuthToken([
+				'client_id' => $clientId,
+				'client_secret' => $clientSecret,
+				'grant_type' => 'refresh_token',
+				'refresh_token' => $refreshToken,
+			]);
+			$this->storeOAuthToken($userId, $data);
+			return (string)$data['access_token'];
+		} catch (\Throwable $e) {
+			$freshToken = $this->getUserToken($userId);
+			$freshExpiry = (int)$this->config->getUserValue($userId, 'deckgithubsync', 'github_token_expires_at', '0');
+			if ($freshToken !== $token && $freshExpiry > time() + 120) {
+				return $freshToken;
+			}
+			throw $e;
+		}
+	}
+
+	/** Validate a user token without exposing it in errors or logs. */
+	public function inspectUserToken(string $token): array {
+		try {
+			$client = $this->clientService->newClient();
 			$resp = $client->get(self::API_BASE . '/user', [
 				'headers' => [
 					'Authorization' => 'Bearer ' . $token,
@@ -93,11 +151,29 @@ class GithubClientService {
 				'timeout' => 20,
 			]);
 			$data = json_decode($resp->getBody(), true);
-			return is_array($data) && isset($data['login']) ? (string)$data['login'] : null;
+			if (is_array($data) && isset($data['login']) && is_string($data['login'])) {
+				return ['login' => $data['login'], 'error' => null, 'status' => 200];
+			}
+			return ['login' => null, 'error' => 'GitHub hat keine Benutzerkennung zurückgegeben.', 'status' => 502];
 		} catch (\Throwable $e) {
-			$this->logger->debug('deckgithubsync: token validation failed', ['exception' => $e]);
-			return null;
+			$status = null;
+			if (method_exists($e, 'getResponse')) {
+				$response = $e->getResponse();
+				$status = $response !== null ? $response->getStatusCode() : null;
+			}
+			$this->logger->warning('deckgithubsync: GitHub token validation failed', ['githubStatus' => $status, 'exceptionType' => get_class($e)]);
+			if ($status === 401) {
+				return ['login' => null, 'error' => 'GitHub hat den Token abgelehnt (401). Token und Ablaufdatum prüfen.', 'status' => 401];
+			}
+			if ($status === 403) {
+				return ['login' => null, 'error' => 'GitHub verweigert den Zugriff (403). Berechtigungen oder Rate-Limit prüfen.', 'status' => 403];
+			}
+			return ['login' => null, 'error' => 'GitHub ist vom Nextcloud-Server aus nicht erreichbar oder antwortet fehlerhaft.', 'status' => 502];
 		}
+	}
+
+	public function getTokenLogin(string $token): ?string {
+		return $this->inspectUserToken($token)['login'];
 	}
 
 	private function base64Url(string $data): string {
@@ -135,12 +211,7 @@ class GithubClientService {
 		}
 		$installationId = $this->getInstallationId($userId);
 		if ($installationId === '') {
-			// Fall back to user PAT (allows dev without GitHub App)
-			$pat = $this->getUserToken($userId);
-			if ($pat === '') {
-				throw new \RuntimeException('No GitHub installation or user token configured');
-			}
-			return $pat;
+			throw new \RuntimeException('No GitHub installation configured');
 		}
 		$client = $this->clientService->newClient();
 		$resp = $client->post(
@@ -163,16 +234,17 @@ class GithubClientService {
 	}
 
 	public function resolveToken(string $userId): string {
-		try {
-			$token = $this->getInstallationToken($userId);
-		} catch (\Throwable $e) {
-			$this->logger->debug('deckgithubsync: installation token failed, trying PAT', ['exception' => $e]);
-			$token = $this->getUserToken($userId);
+		if ($this->getUserToken($userId) !== '') {
+			try {
+				return $this->getUserAccessToken($userId);
+			} catch (\Throwable $e) {
+				$this->logger->warning('deckgithubsync: user token refresh failed; trying installation token', ['exceptionType' => get_class($e)]);
+				if ($this->getInstallationId($userId) === '') {
+					throw $e;
+				}
+			}
 		}
-		if ($token === '') {
-			throw new \RuntimeException('No GitHub token configured (installation or personal token required)');
-		}
-		return $token;
+		return $this->getInstallationToken($userId);
 	}
 
 	/** Generic REST call, returns decoded JSON. @return array<string,mixed> */
@@ -207,7 +279,7 @@ class GithubClientService {
 	/** @return array{data?: array, errors?: array} */
 	public function graphql(string $userId, string $query, array $variables = [], bool $asUser = false): array {
 		$client = $this->clientService->newClient();
-		$userToken = $asUser ? $this->getUserToken($userId) : '';
+		$userToken = $asUser ? $this->getUserAccessToken($userId) : '';
 		if ($asUser && $userToken === '') {
 			throw new \RuntimeException('Connect a GitHub user account to list projects');
 		}

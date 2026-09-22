@@ -155,7 +155,7 @@ class SettingsController extends Controller {
 		return $this->getAdmin();
 	}
 
-	/** @NoAdminRequired */
+	#[NoAdminRequired]
 	public function listBoards(): DataResponse {
 		try {
 			return new DataResponse($this->deck->getBoards($this->userId ?? ''));
@@ -176,32 +176,43 @@ class SettingsController extends Controller {
 		}
 	}
 
-	/** @NoAdminRequired */
+	#[NoAdminRequired]
 	public function githubStatus(): DataResponse {
-		$oauth = $this->config->getAppValue('deckgithubsync', 'oauth_client_id', '') !== '';
+		$oauth = $this->config->getAppValue('deckgithubsync', 'oauth_client_id', '') !== ''
+			&& $this->config->getAppValue('deckgithubsync', 'oauth_client_secret', '') !== '';
 		$token = $this->github->getUserToken($this->userId ?? '');
 		if ($token === '') {
 			return new DataResponse(['connected' => false, 'oauth' => $oauth]);
 		}
-		$login = $this->github->getTokenLogin($token);
-		if ($login === null) {
-			return new DataResponse(['connected' => false, 'invalid' => true, 'oauth' => $oauth]);
+		try {
+			$token = $this->github->getUserAccessToken($this->userId ?? '');
+		} catch (\Throwable) {
+			return new DataResponse(['connected' => false, 'invalid' => true, 'oauth' => $oauth, 'reason' => 'GitHub-Verbindung abgelaufen. Bitte erneut verbinden.']);
 		}
-		return new DataResponse(['connected' => true, 'login' => $login, 'oauth' => $oauth]);
+		$result = $this->github->inspectUserToken($token);
+		if ($result['login'] === null) {
+			return new DataResponse(['connected' => false, 'invalid' => true, 'oauth' => $oauth, 'reason' => $result['error']]);
+		}
+		return new DataResponse(['connected' => true, 'login' => $result['login'], 'oauth' => $oauth]);
 	}
 
-	/** @NoAdminRequired */
+	#[NoAdminRequired]
 	public function setUserToken(string $token): DataResponse {
-		$login = $this->github->getTokenLogin(trim($token));
-		if ($login === null) {
-			return new DataResponse(['error' => 'Token ist ungültig oder GitHub ist nicht erreichbar'], Http::STATUS_BAD_REQUEST);
+		$token = trim($token);
+		if ($token === '') {
+			return new DataResponse(['error' => 'Bitte einen GitHub-Token eingeben.'], Http::STATUS_BAD_REQUEST);
 		}
-		$this->github->setUserToken($this->userId ?? '', trim($token));
-		$this->github->setStoredLogin($this->userId ?? '', $login);
-		return new DataResponse(['connected' => true, 'login' => $login]);
+		$result = $this->github->inspectUserToken($token);
+		if ($result['login'] === null) {
+			$code = $result['status'] === 401 ? Http::STATUS_BAD_REQUEST : Http::STATUS_BAD_GATEWAY;
+			return new DataResponse(['error' => $result['error']], $code);
+		}
+		$this->github->setUserToken($this->userId ?? '', $token);
+		$this->github->setStoredLogin($this->userId ?? '', $result['login']);
+		return new DataResponse(['connected' => true, 'login' => $result['login']]);
 	}
 
-	/** @NoAdminRequired */
+	#[NoAdminRequired]
 	public function disconnectGithub(): DataResponse {
 		$this->github->clearUserToken($this->userId ?? '');
 		return new DataResponse(['connected' => false]);

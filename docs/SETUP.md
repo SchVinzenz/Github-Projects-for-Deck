@@ -41,12 +41,17 @@ npm ci && npm run build
 
 ## GitHub anbinden (Nutzer, empfohlen)
 
-1. Admin: **Einstellungen → Deck ↔ GitHub Projects** → Abschnitt *GitHub OAuth*:
+1. Ein Admin richtet einmalig die GitHub OAuth App ein:
+   **Einstellungen → Deck ↔ GitHub Projects** → Abschnitt *GitHub OAuth*:
    GitHub → Settings → Developer settings → OAuth Apps → New OAuth App,
-   Authorization callback URL aus dem Admin-Formular übernehmen.
-   Client ID + Client Secret eintragen, speichern.
-2. Nutzer: **Persönliche Einstellungen → Deck ↔ GitHub Projects** →
-   *Mit GitHub verbinden* klicken, auf GitHub bestätigen, fertig.
+   Authorization callback URL exakt aus dem Admin-Formular übernehmen.
+   Client ID + Client Secret eintragen, speichern. Die angezeigte URL
+   muss auf die öffentlich erreichbare Nextcloud-Adresse zeigen
+   (bei Reverse Proxy ggf. `overwritehost`/`overwriteprotocol` prüfen).
+2. Danach verbindet **jeder Nextcloud-Benutzer sein eigenes GitHub-Konto**:
+   **Persönliche Einstellungen → Deck ↔ GitHub Projects** →
+   *Mit GitHub verbinden* klicken und auf GitHub bestätigen.
+   Ablaufende OAuth-Tokens werden mit dem Refresh-Token erneuert.
    Bereits verbundene Nutzer sollten sich für die Organisationserkennung
    erneut verbinden, damit der zusätzliche `read:org`-Scope erteilt wird.
 
@@ -57,8 +62,9 @@ Alternative ohne OAuth App: Personal Access Token (fine-grained, Scopes
 
 GitHub App mit Permissions *Projects: Read & Write*, *Issues: Read & Write*,
 *Pull requests: Read* erstellen, installieren, App ID + Private Key +
-Installation ID in den Admin-Einstellungen hinterlegen. Vorteil: Sync läuft
-auch ohne Nutzer-Token über Cron.
+Installation ID in den Admin-Einstellungen hinterlegen. Persönliche
+OAuth-/PAT-Tokens werden für den jeweiligen Nutzer bevorzugt; die GitHub
+App dient als Fallback für Sync ohne nutzbares persönliches Token.
 
 ## Mapping anlegen
 
