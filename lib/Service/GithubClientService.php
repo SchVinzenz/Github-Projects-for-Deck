@@ -220,8 +220,9 @@ class GithubClientService {
 		if (!is_array($decoded)) {
 			throw new \RuntimeException('Invalid GraphQL response');
 		}
-		if (isset($decoded['errors'])) {
+		if (!empty($decoded['errors'])) {
 			$this->logger->warning('deckgithubsync GraphQL errors', ['errors' => $decoded['errors']]);
+			throw new \RuntimeException('GitHub GraphQL request failed: ' . substr((string)json_encode($decoded['errors']), 0, 300));
 		}
 		return $decoded;
 	}

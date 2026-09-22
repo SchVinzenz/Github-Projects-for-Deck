@@ -295,10 +295,11 @@ class SyncService {
 	 */
 	private function linkItems(int $mapId, int $deckCardId, string $githubItemId, array $gItem, string $deckHash, string $githubHash): ?ItemMap {
 		try {
-			if ($this->itemMaps->findByDeckCard($mapId, $deckCardId) !== null
-				|| $this->itemMaps->findByGithubItem($mapId, $githubItemId) !== null) {
-				return $this->itemMaps->findByDeckCard($mapId, $deckCardId)
-					?? $this->itemMaps->findByGithubItem($mapId, $githubItemId);
+			$byCard = $this->itemMaps->findByDeckCard($mapId, $deckCardId);
+			$byItem = $this->itemMaps->findByGithubItem($mapId, $githubItemId);
+			if ($byCard !== null || $byItem !== null) {
+				$link = $byCard ?? $byItem;
+				return $link->getDeckCardId() === $deckCardId && $link->getGithubItemId() === $githubItemId ? $link : null;
 			}
 			$content = $gItem['content'] ?? [];
 			$im = new ItemMap();
@@ -315,8 +316,9 @@ class SyncService {
 		} catch (\Throwable $e) {
 			$this->logger->debug('deckgithubsync: link already exists', ['map' => $mapId, 'card' => $deckCardId]);
 			try {
-				return $this->itemMaps->findByDeckCard($mapId, $deckCardId)
+				$link = $this->itemMaps->findByDeckCard($mapId, $deckCardId)
 					?? $this->itemMaps->findByGithubItem($mapId, $githubItemId);
+				return $link !== null && $link->getDeckCardId() === $deckCardId && $link->getGithubItemId() === $githubItemId ? $link : null;
 			} catch (\Throwable) {
 				return null;
 			}
@@ -335,7 +337,9 @@ class SyncService {
 			$titleChanged = $titleAllowed && ($content['title'] ?? null) !== $card['title'];
 			$bodyChanged = $bodyAllowed && ($content['body'] ?? null) !== ($card['description'] ?? '');
 			if ($titleChanged || $bodyChanged) {
-				$this->github->updateDraft($userId, $gItem['id'], $content['id'] ?? '', $card['title'], $card['description']);
+				$this->github->updateDraft($userId, $gItem['id'], $content['id'] ?? '',
+					$titleAllowed ? $card['title'] : ($content['title'] ?? ''),
+					$bodyAllowed ? ($card['description'] ?? '') : ($content['body'] ?? ''));
 			}
 		} elseif ($type === 'Issue') {
 			$patch = [];
@@ -399,7 +403,10 @@ class SyncService {
 		$ghComments = $this->github->getIssueComments($userId, $repo, $number);
 		$ghBodies = array_map(fn ($c) => trim($c['body']), $ghComments);
 		foreach ($deckComments as $msg) {
-			if (!in_array(trim($msg), $ghBodies, true)) {
+			if (str_starts_with($msg, '[GitHub ') || str_starts_with($msg, '[Deck] ')) {
+				continue;
+			}
+			if (!in_array('[Deck] ' . trim($msg), $ghBodies, true)) {
 				$this->github->addIssueComment($userId, $repo, $number, '[Deck] ' . $msg);
 			}
 		}
@@ -438,8 +445,12 @@ class SyncService {
 		if ($this->fieldAllowed($fieldMap, 'title', BoardMap::DIR_TO_DECK) && isset($content['title']) && $content['title'] !== $card['title']) {
 			$patch['title'] = $content['title'];
 		}
-		if ($this->fieldAllowed($fieldMap, 'description', BoardMap::DIR_TO_DECK) && isset($content['body']) && $content['body'] !== ($card['description'] ?? '')) {
-			$patch['description'] = $content['body'];
+		$body = $content['body'] ?? null;
+		if ($body !== null && ($content['__typename'] ?? '') === 'PullRequest') {
+			$body .= "\n\n[GitHub PR, read-only: " . ($content['url'] ?? '') . ']';
+		}
+		if ($this->fieldAllowed($fieldMap, 'description', BoardMap::DIR_TO_DECK) && $body !== null && $body !== ($card['description'] ?? '')) {
+			$patch['description'] = $body;
 		}
 		if ($this->fieldAllowed($fieldMap, 'due', BoardMap::DIR_TO_DECK) && $dateFieldId !== '') {
 			$ghDue = GithubProjectService::dateOf($gItem, $dateFieldId);
@@ -492,7 +503,7 @@ class SyncService {
 		$ghComments = $this->github->getIssueComments($userId, $repo, $number);
 		foreach ($ghComments as $gc) {
 			$body = trim($gc['body']);
-			if ($body === '' || in_array($body, $deckComments, true) || in_array('[Deck] ' . $body, $deckComments, true)) {
+			if ($body === '' || str_starts_with($body, '[Deck] ') || in_array('[GitHub ' . $gc['user'] . '] ' . $body, $deckComments, true)) {
 				continue;
 			}
 			$this->deck->addComment($userId, $cardId, '[GitHub ' . $gc['user'] . '] ' . $body);

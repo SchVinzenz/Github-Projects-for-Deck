@@ -121,7 +121,11 @@ class DeckService {
 			$patch['owner'] ?? $current->getOwner(),
 			$patch['description'] ?? $current->getDescription(),
 			$patch['order'] ?? $current->getOrder(),
-			$patch['duedate'] ?? $this->dateOrNull($current->getDuedate()),
+			array_key_exists('duedate', $patch) ? $patch['duedate'] : $this->dateOrNull($current->getDuedate()),
+			null,
+			null,
+			$current->getDone() === null ? null : new \OCA\Deck\Model\OptionalNullableValue($current->getDone()),
+			$this->dateOrNull($current->getStartdate()),
 		);
 	}
 
@@ -151,7 +155,10 @@ class DeckService {
 
 	public function addComment(string $userId, int $cardId, string $message, string $actorId = ''): void {
 		try {
-			$this->commentsManager->create($actorId !== '' ? $actorId : $userId, 'deckCard', (string)$cardId, $message);
+			$comment = $this->commentsManager->create('users', $actorId !== '' ? $actorId : $userId, 'deckCard', (string)$cardId);
+			$comment->setMessage($message);
+			$comment->setVerb('comment');
+			$this->commentsManager->save($comment);
 		} catch (\Throwable $e) {
 			$this->logger->debug('deckgithubsync: comment create failed', ['exception' => $e]);
 		}
@@ -202,27 +209,19 @@ class DeckService {
 	}
 
 	public function archiveCard(string $userId, int $cardId, bool $archive = true): void {
-		try {
-			$this->boardService($userId);
-			$cardService = Server::get('OCA\Deck\Service\CardService');
-			if ($archive) {
-				$cardService->archive($cardId);
-			} else {
-				$cardService->unarchive($cardId);
-			}
-		} catch (\Throwable $e) {
-			$this->logger->debug('deckgithubsync: archive failed', ['exception' => $e]);
+		$this->boardService($userId);
+		$cardService = Server::get('OCA\Deck\Service\CardService');
+		if ($archive) {
+			$cardService->archive($cardId);
+		} else {
+			$cardService->unarchive($cardId);
 		}
 	}
 
 	public function deleteCard(string $userId, int $cardId): void {
-		try {
-			$this->boardService($userId);
-			$cardService = Server::get('OCA\Deck\Service\CardService');
-			$cardService->delete($cardId);
-		} catch (\Throwable $e) {
-			$this->logger->debug('deckgithubsync: delete failed', ['exception' => $e]);
-		}
+		$this->boardService($userId);
+		$cardService = Server::get('OCA\Deck\Service\CardService');
+		$cardService->delete($cardId);
 	}
 
 	/** Normalize Deck duedate (timestamp|string|null) to Y-m-d or null. */

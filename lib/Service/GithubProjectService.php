@@ -143,7 +143,7 @@ class GithubProjectService {
 	}
 
 	public function setIssueAssignees(string $userId, string $repo, int $number, array $assignees): void {
-		$this->client->rest($userId, 'POST', '/repos/' . $repo . '/issues/' . $number . '/assignees', ['assignees' => array_values($assignees)]);
+		$this->updateIssueRest($userId, $repo, $number, ['assignees' => array_values($assignees)]);
 	}
 
 	/** @return array<int, array{id:int,body:string,user:string,created_at:string}> */

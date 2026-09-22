@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\DeckGithubSync\Controller;
 
+use OCA\DeckGithubSync\Db\BoardMap;
 use OCA\DeckGithubSync\Db\BoardMapMapper;
 use OCA\DeckGithubSync\Db\ItemMapMapper;
 use OCA\DeckGithubSync\Service\DeckService;
@@ -46,13 +47,14 @@ class WebhookController extends Controller {
 	#[NoCSRFRequired]
 	public function github(): DataResponse {
 		$secret = $this->config->getAppValue('deckgithubsync', 'webhook_secret', '');
+		if ($secret === '') {
+			return new DataResponse(['error' => 'Webhook is not configured'], Http::STATUS_SERVICE_UNAVAILABLE);
+		}
 		$body = file_get_contents('php://input') ?: '';
-		if ($secret !== '') {
-			$sig = $this->request->getHeader('X-Hub-Signature-256');
-			$expected = 'sha256=' . hash_hmac('sha256', $body, $secret);
-			if (!hash_equals($expected, $sig)) {
-				return new DataResponse(['error' => 'Invalid signature'], Http::STATUS_UNAUTHORIZED);
-			}
+		$sig = $this->request->getHeader('X-Hub-Signature-256');
+		$expected = 'sha256=' . hash_hmac('sha256', $body, $secret);
+		if (!hash_equals($expected, $sig)) {
+			return new DataResponse(['error' => 'Invalid signature'], Http::STATUS_UNAUTHORIZED);
 		}
 		$event = $this->request->getHeader('X-GitHub-Event');
 		$payload = json_decode($body, true) ?? [];
@@ -69,7 +71,8 @@ class WebhookController extends Controller {
 		$handled = 0;
 		$queued = 0;
 		foreach ($this->maps->findByProject($projectNodeId) as $map) {
-			if ($event === 'projects_v2_item' && in_array($action, ['deleted', 'archived', 'restored'], true)) {
+			if ($event === 'projects_v2_item' && $map->getDirection() !== BoardMap::DIR_TO_GITHUB
+				&& in_array($action, ['deleted', 'archived', 'restored'], true)) {
 				$handled += $this->applyItemEvent($map->getUserId(), (int)$map->getId(), (string)($item['node_id'] ?? ''), $action);
 			}
 			$map->setLastSync(0);

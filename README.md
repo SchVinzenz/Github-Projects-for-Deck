@@ -3,7 +3,7 @@
 Bidirektionale, pro Board und pro Feld konfigurierbare Synchronisation zwischen
 Nextcloud Deck und GitHub Projects v2.
 
-## Stand (0.4.1)
+## Stand (0.4.2)
 
 - OAuth-Login per Klick (+ PAT-Fallback), Token-Status, Boards-Dropdown
 - Redesignte Admin-/Personal-Einstellungen (nativ, `.mjs`-Module)
@@ -14,6 +14,8 @@ Nextcloud Deck und GitHub Projects v2.
   Löschungen auf Listen-Abwesenheit
 - Validierte API (Richtung, Board-Zugriff, Token), `occ`-Fehlercodes
 - Unit-Test `MappingTest`, Docs unter `docs/`
+- Webhook verlangt ein konfiguriertes Secret; GitHub-Fehler brechen Mutationen ab;
+  Kommentar-Sync und deaktivierte Draft-Felder korrigiert
 
 - User-Mapping `deckghs_usermap` pro Board (`PUT /api/v1/mappings/{id}/users`), Sync nutzt es für Assignees beide Richtungen
 - Due-Date via konfigurierbarer `dateFieldId` (erstes DATE-Feld auto-erkannt, pro Mapping änderbar), `DeckService::normalizeDue`
@@ -37,13 +39,8 @@ Nextcloud Deck und GitHub Projects v2.
 
 ## Setup
 
-1. App ist in `data/apps-extra/deckgithubsync` verlinkt (wird als `apps-shared` gemountet).
-   Für `workspace/server/apps-extra` einmalig manuell (braucht root):
-   `sudo ln -s /home/schaechner/Projects/deck-github-sync /home/schaechner/nextcloud-docker-dev/workspace/server/apps-extra/deckgithubsync`
-2. GitHub App erstellen (Permissions: Projects RW, Issues RW, PR Read, Webhook `projects_v2_item, issues`), installieren, App-ID + Private Key + Installation-ID in Admin-Einstellungen eintragen.
-3. Webhook auf `https://<nc>/index.php/apps/deckgithubsync/webhook/github` zeigen lassen, Secret eintragen.
-4. Pro User: Deck-Board + GitHub Project mappen (Persönliche Einstellungen), Richtung/Felder wählen.
-5. `occ deckgithubsync:sync` oder Cron abwarten.
+Die [manuelle Installation](docs/SETUP.md) beschreibt den Ablauf für eine
+reguläre Nextcloud-Instanz. Deck muss vorher aktiviert sein.
 
 ## Dev
 

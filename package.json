@@ -1,6 +1,6 @@
 {
   "name": "deckgithubsync",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "scripts": {
     "dev": "vite build --mode development",
