@@ -10,8 +10,6 @@ Deck (Board/Stack/Card)  <--DeckService-->  SyncService  <--GithubProjectService
 | Klasse | Aufgabe |
 |---|---|
 | `Service/DeckService` | Deck-2.x-API (`Board/Stack/Card/Label/AssignmentService`, `Card/LabelMapper`), User-Kontext via `setUserId` + Session |
-| `Service/GithubClientService` | Auth: GitHub-App-JWT → Installation-Token (1 h, gecacht), User-PAT/OAuth-Token; GraphQL- + REST-Calls, Token-Validierung |
-| `Service/GithubProjectService` | Projects-v2-Operationen: Project auflösen/discover, Repositories, Fields/Status-Optionen (inkl. Anlegen), Items (paginiert), Draft anlegen/updaten/konvertieren, Status/Datum setzen, archivieren/löschen; Issue-REST (Titel/Body/Labels/Assignees/Comments) |
 | `Service/GithubClientService` | Auth: GitHub-App-JWT → Installation-Token, OAuth-Code/Refresh-Flow, Token-Validierung; GraphQL (fail-loud) + REST |
 | `Service/SyncService` | Bidirektionaler Sync pro Mapping: Richtung pro Board + pro Feld, Last-Write-Wins via Zeitstempel, getrennte Deck-/GitHub-Hashes, Titel-Dedup, PRs read-only |
 | `Controller/OAuthController` | GitHub-Login-Flow (state-gesichert, Token + Login werden pro Nutzer gespeichert) |
@@ -23,8 +21,9 @@ Deck (Board/Stack/Card)  <--DeckService-->  SyncService  <--GithubProjectService
 
 ## Datenmodell
 
-- `deckghs_boardmap`: Board ↔ Project, Richtung, Feldconfig (JSON),
-  `status_field_id`, `date_field_id`, `last_sync`
+- `deckghs_boardmap`: Board ↔ Project, optionales Issue-Repository, Richtung,
+  Feldconfig (JSON), `status_field_id`, `date_field_id`, `start_field_id`,
+  `last_sync` (wird nur bei fehlerfreien Läufen gesetzt)
 - `deckghs_itemmap`: Card ↔ Project-Item, Content-Typ, Deck-Hash + GitHub-Hash (getrennt, für idempotente Syncs)
 - `deckghs_usermap`: GitHub-Login ↔ Deck-Benutzer (pro Mapping, für Assignees)
 
@@ -32,13 +31,19 @@ Deck (Board/Stack/Card)  <--DeckService-->  SyncService  <--GithubProjectService
 
 - Richtung global pro Board (`both`, `deck_to_github`, `github_to_deck`) und
   verfeinerbar pro Feld (`title`, `description`, `status`, `labels`,
-  `assignees`, `due`, `comments`, jeweils zusätzlich `off` möglich).
+  `assignees`, `start`, `due`, `comments`, jeweils zusätzlich `off` möglich).
+  Unbekannte Werte wirken wie `off`.
+- **Optionale Felder best-effort**: Labels, Assignees, Kommentare sowie
+  Schema-Anpassungen (Datumsfelder, Status-Optionen) erzeugen bei Fehlern
+  Warnungen statt Abbrüche; Titel/Status/Daten bleiben hart.
 - **Last-Write-Wins**: Bei beidseitig geänderten Items gewinnt die neuere
   Seite (`lastModified` vs. `updatedAt`).
 - **Loop-Schutz**: Getrennte Hashes über die gemappten Felder pro Seite + Bot-Filter im Webhook.
 - **Status**: Deck-Stack ↔ Status-Option (per **ID**, nicht Name).
-- **Fälligkeit**: Deck-`duedate` ↔ konfigurierbares Datumsfeld (`dateFieldId`,
-  Default: erstes DATE-Feld).
+- **Fälligkeit/Start**: Deck-Daten ↔ Datumsfelder (per Name erkannt, Fallback:
+  einziges DATE-Feld; `Start date`/`Due date` werden bei Bedarf angelegt).
+- **Session-Isolation**: Der Sync stellt nach dem Lauf den vorherigen
+  Session-Benutzer wieder her (Cron-Hygiene).
 - **Kommentare**: Duplikat-geschützt, mit `[Deck]`- bzw. `[GitHub user]`-Präfix.
 - **Assignees**: Nur über explizites Nutzer-Mapping, sonst Skip.
 - **Pull Requests**: read-only (nur GitHub → Deck, markiert).

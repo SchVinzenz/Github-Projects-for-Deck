@@ -58,6 +58,29 @@ cd apps-extra/deck && npm ci && npm run build
 Assignees laufen nur über explizites Nutzer-Mapping
 (Mapping → *Felder & Nutzer*). Ohne Eintrag wird übersprungen.
 
+## Instanz hängt im Wartungsmodus nach App-Update
+
+Passiert, wenn eine Migration fehlschlägt (die App hinterlässt den
+Wartungsmodus absichtlich an). Ursache im Log suchen, Fehler beheben und:
+
+```bash
+sudo -u www-data php occ maintenance:mode --off
+sudo -u www-data php occ upgrade
+```
+
+Bekannter Fall: Nextcloud lehnt `NOT NULL`-Spalten mit leerem String als
+Default ab (`... is NotNull, but has empty string or null as default`).
+Optionale Textspalten daher als `notnull => false` anlegen (ohne Default)
+und im Entity-Getter auf `''` normalisieren.
+
+## API antwortet mit Login-Seite statt JSON
+
+Dann ist die Anfrage nicht authentifiziert (Session abgelaufen,
+Basic-Auth-Daten falsch) oder die Instanz steht im Wartungsmodus
+(siehe oben) bzw. braucht ein `occ upgrade`. Erst `occ status` prüfen
+(`maintenance: false`, `needsDbUpgrade: false`), dann Header
+(`OCS-APIRequest: true`) und Zugangsdaten prüfen.
+
 ## Logs
 
 - Nextcloud-Log nach `deckgithubsync` filtern.

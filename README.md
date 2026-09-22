@@ -3,44 +3,42 @@
 Bidirektionale, pro Board und pro Feld konfigurierbare Synchronisation zwischen
 Nextcloud Deck und GitHub Projects v2.
 
-## Stand (0.5.0)
+## Funktionen (0.5.0)
 
-- OAuth-Login per Klick (+ PAT-Fallback), Token-Status, Boards-Dropdown
-- GitHub-Projects-Auswahl für eigenes Konto und Organisationen, mit manueller Eingabe als Ausweichmöglichkeit
-- Nextcloud-kompatible API-URLs, per-User-OAuth mit Token-Refresh und aussagekräftige Auth-Fehler
-- OAuth-Start und -Callback mit korrekter CSRF-Ausnahme; bestätigter Verbindungsstatus in den persönlichen Einstellungen
-- Persönliche und Organisations-Projects lassen sich nach der Auswahl als Mapping anlegen
-- Robustere Erkennung von Sync-Fehlern, sichere Draft-Verknüpfung, Kommentar-Paginierung, Schutz gegen doppelte Mappings und vollständige Mapping-Löschung
-- Ungenutzte Frontend-Abhängigkeiten entfernt; Produktions-Abhängigkeiten ohne bekannte npm-Audit-Funde
-- Deck-Listen und Project-Statusoptionen, Start-/Fälligkeitsdaten, Erledigt/Issue-Status, Labels und Kommentare in beide Richtungen; wählbares Issue-Repository statt Drafts
-- Redesignte Admin-/Personal-Einstellungen (nativ, `.mjs`-Module)
-- Sync: beide Richtungen für Anlage + Update, Last-Write-Wins, getrennte
-  `deck_hash`/`github_hash` (idempotent, konvergiert), Titel-Dedup,
+- **Verbinden per Klick**: GitHub OAuth-Login mit Token-Refresh, alternativ
+  Personal Access Token; Verbindungsstatus inkl. Prüfung in den Einstellungen
+- **Mapping per Auswahl**: Deck-Board-Dropdown, GitHub-Project-Suche (eigene
+  und Organisations-Projects) mit manueller Eingabe als Fallback,
+  Duplikat-Schutz, transaktionales Löschen inkl. Links
+- **Issue-Modus optional**: Ohne Repository entstehen Project-Drafts; mit
+  Repository werden Drafts (auch bestehende) in Issues umgewandelt
+- **Automatik**: Cron-Job (Intervall einstellbar, min. 300 s) plus optionaler
+  GitHub-Webhook für Echtzeit; manueller Sync per Button oder
+  `php occ deckgithubsync:sync [mapping-id]`
+- **Sync-Logik**: Beide Richtungen für Anlage + Update, Last-Write-Wins,
+  getrennte Deck-/GitHub-Hashes (idempotent), Titel-Dedup bei neuen Mappings,
   race-sichere Links, Session-Isolation für Cron
-- Webhook mit echten `deleted`/`archived`/`restored`-Events; keine
-  Löschungen auf Listen-Abwesenheit
-- Validierte API (Richtung, Board-Zugriff, Token), `occ`-Fehlercodes
-- Unit-Test `MappingTest`, Docs unter `docs/`
-- Webhook verlangt ein konfiguriertes Secret; GitHub-Fehler brechen Mutationen ab;
-  Kommentar-Sync und deaktivierte Draft-Felder korrigiert
-
-- User-Mapping `deckghs_usermap` pro Board (`PUT /api/v1/mappings/{id}/users`), Sync nutzt es für Assignees beide Richtungen
-- Start- und Fälligkeitsdatum über separate Project-Datumsfelder, `DeckService::normalizeDue`
-- PR-Items read-only: nie Push, bei Anlage `[GitHub PR, read-only]` + URL, kein Delete
-- Delete/Archive-Propagation: GitHub `archivedAt` → Deck-Archiv, GitHub gelöscht → Deck-Delete, Deck gelöscht → GitHub-Archiv; Hash inkl. Due/Labels/Assignees
-- Älter (0.2.0): GraphQL + Issues-REST, Last-Write-Wins, Webhook-Routing, Labels/Comments beide Richtungen
+- **Felder**: Titel, Beschreibung, Status, Labels, Assignees, Start- und
+  Fälligkeitsdatum, Erledigt-Status, Kommentare – Richtung pro Feld einstellbar
+- **Robustheit**: Optionale Felder (Labels, Assignees, Kommentare,
+  Schema-Anpassungen) laufen best-effort mit Warnungen statt Abbrüchen;
+  GraphQL-Fehler brechen laut ab statt still leer zu liefern; destruktive
+  Aktionen nur per explizitem Webhook-Event, nie per Listen-Abwesenheit
+- **Tests & Doku**: 27 Unit-Tests, Docs unter `docs/`
 
 ## Mapping
 
 | Deck | GitHub | Stand |
 |---|---|---|
-| Stack | Status-Option (ID) | ✅ |
+| Stack | Status-Option (ID, fehlende werden angelegt) | ✅ |
 | Titel/Beschreibung | DraftIssue + Issue | ✅ |
-| Label | Issue-Label (REST) | ✅ |
-| Assignee | via User-Mapping Tabelle | ✅ (ohne Mapping wird übersprungen) |
+| Label | Issue-Label (REST, fehlende werden angelegt) | ✅ |
+| Assignee | via User-Mapping-Tabelle | ✅ (ohne Mapping wird übersprungen) |
 | Kommentar | Issue-Comment (`[Deck]`/`[GitHub user]`) | ✅ |
-| Due | Date-Field (`dateFieldId`) | ✅ |
-| Archiv/Delete | nur per Webhook-Event (`deleted`/`archived`/`restored`), nie per Listen-Abwesenheit | ✅ |
+| Fälligkeit | Datumsfeld (auto-erkannt, Default: einziges DATE-Feld) | ✅ |
+| Startdatum | separates Datumsfeld (`Start date` wird ggf. angelegt) | ✅ |
+| Erledigt | Issue open/closed | ✅ |
+| Archiv/Delete | nur per Webhook-Event (`deleted`/`archived`/`restored`) | ✅ |
 | PR | read-only Card | ✅ |
 | Anhang | — | TODO |
 
@@ -49,12 +47,19 @@ Nextcloud Deck und GitHub Projects v2.
 Die [manuelle Installation](docs/SETUP.md) beschreibt den Ablauf für eine
 reguläre Nextcloud-Instanz. Deck muss vorher aktiviert sein.
 
+## Benutzung
+
+Siehe [Benutzung](docs/USAGE.md): verbinden, Mapping anlegen, Richtungen und
+Nutzer-Mapping verstehen, Automatik und manueller Sync.
+
 ## Dev
 
-- `php -l lib/...`, `./vendor/bin/phpunit tests/Unit` (im Server-Checkout: `NOCOVERAGE=1 ./autotest.sh sqlite apps-extra/deckgithubsync/tests`)
-- Frontend: `npm ci && npm run build`
+- `php -l lib/...`, Unit-Tests im Server-Checkout:
+  `phpunit --bootstrap tests/bootstrap.php apps-extra/deckgithubsync/tests/Unit`
+- Frontend: `npm ci && npm run build` (`.mjs`-Module + CSS werden committet)
 - Deck muss installiert sein, sonst wirft `DeckService` mit klarer Meldung.
 
 ## Doku
 
-Kurz-Doku unter `docs/`: `SETUP.md`, `ARCHITECTURE.md`, `API.md`, `TROUBLESHOOTING.md`.
+Kurz-Doku unter `docs/`: `SETUP.md`, `USAGE.md`, `ARCHITECTURE.md`, `API.md`,
+`TROUBLESHOOTING.md`.

@@ -89,6 +89,15 @@ Ein in Deck erledigter Karte entsprechendes Issue wird geschlossen und beim
 Zurücksetzen wieder geöffnet. Bereits vorhandene GitHub-Issues werden nicht
 in ein anderes Repository verschoben.
 
+## Automatik: Cron und Webhook
+
+Der Sync läuft ohne Klicks: Der Cron-Job (`SyncJob`) synchronisiert alle
+fälligen Mappings, das Intervall steht in den Admin-Einstellungen
+(Minimum 300 s). Voraussetzung ist der reguläre Nextcloud-Hintergrundjob
+per System-Cron (`cron.php`); der AJAX-Modus reicht nicht für verlässliche
+Intervalle. Mit Webhook (siehe unten) wird das betroffene Mapping sofort
+fällig gestellt und beim nächsten Cron-Lauf synchronisiert.
+
 ## Webhook (optional, für Echtzeit)
 
 GitHub App → Webhook auf
