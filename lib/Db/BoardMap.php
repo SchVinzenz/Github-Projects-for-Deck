@@ -22,6 +22,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setGithubOwner(string $v)
  * @method int getGithubNumber()
  * @method void setGithubNumber(int $v)
+ * @method string getGithubRepository()
+ * @method void setGithubRepository(string $v)
  * @method string getDirection()
  * @method void setDirection(string $v)
  * @method string getFieldConfig()
@@ -30,6 +32,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setStatusFieldId(string $v)
  * @method string getDateFieldId()
  * @method void setDateFieldId(string $v)
+ * @method string getStartFieldId()
+ * @method void setStartFieldId(string $v)
  * @method int getLastSync()
  * @method void setLastSync(int $v)
  */
@@ -43,10 +47,12 @@ class BoardMap extends Entity {
 	protected $githubProjectId = '';
 	protected $githubOwner = '';
 	protected $githubNumber = 0;
+	protected $githubRepository = '';
 	protected $direction = self::DIR_BOTH;
 	protected $fieldConfig = '{}';
 	protected $statusFieldId = '';
 	protected $dateFieldId = '';
+	protected $startFieldId = '';
 	protected $lastSync = 0;
 
 	public function __construct() {
@@ -55,10 +61,12 @@ class BoardMap extends Entity {
 		$this->addType('githubProjectId', 'string');
 		$this->addType('githubOwner', 'string');
 		$this->addType('githubNumber', 'integer');
+		$this->addType('githubRepository', 'string');
 		$this->addType('direction', 'string');
 		$this->addType('fieldConfig', 'string');
 		$this->addType('statusFieldId', 'string');
 		$this->addType('dateFieldId', 'string');
+		$this->addType('startFieldId', 'string');
 		$this->addType('lastSync', 'integer');
 	}
 
@@ -71,6 +79,7 @@ class BoardMap extends Entity {
 			'labels' => self::DIR_BOTH,
 			'assignees' => self::DIR_BOTH,
 			'due' => self::DIR_BOTH,
+			'start' => self::DIR_BOTH,
 			'comments' => self::DIR_BOTH,
 		];
 		try {

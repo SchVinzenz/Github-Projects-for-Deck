@@ -57,6 +57,10 @@
 							<option value="github_to_deck">GitHub → Deck</option>
 						</select>
 					</label>
+					<label>Issue-Repository
+						<input v-model.trim="m.githubRepository" list="deckghs-repositories" placeholder="leer = Draft" @change="update(m)" />
+					</label>
+					<span class="deckghs-muted">Ein Repository wandelt verknüpfte Drafts beim nächsten Sync in Issues um.</span>
 					<span class="deckghs-muted">Sync: {{ m.lastSync ? new Date(m.lastSync * 1000).toLocaleString() : 'noch nie' }}</span>
 					<span class="deckghs-spacer" />
 					<button class="deckghs-btn primary" :disabled="syncing[m.id]" @click="sync(m)">{{ syncing[m.id] ? 'Läuft …' : 'Jetzt syncen' }}</button>
@@ -92,6 +96,7 @@
 		<section class="deckghs-card">
 			<h2>Neues Mapping</h2>
 			<p class="deckghs-muted">Wähle ein Deck-Board und ein GitHub Project. GitHub-Repositories sind keine Project-Mappings.</p>
+			<p class="deckghs-muted">Wähle ein Issue-Repository, damit Karten als GitHub Issues entstehen. Bereits verknüpfte Drafts werden beim nächsten Sync umgewandelt. Ohne Repository bleiben es Project-Drafts.</p>
 			<div class="deckghs-row">
 				<label>Deck-Board
 					<select v-model.number="form.deckBoardId">
@@ -116,9 +121,14 @@
 						<option value="github_to_deck">GitHub → Deck</option>
 					</select>
 				</label>
+				<label>Issue-Repository
+					<input v-model.trim="form.githubRepository" list="deckghs-repositories" placeholder="owner/repository (leer = Draft)" />
+				</label>
+				<datalist id="deckghs-repositories"><option v-for="repo in repositories" :key="repo" :value="repo" /></datalist>
 				<button class="deckghs-btn primary" :disabled="!canCreate || creating" @click="create">{{ creating ? 'Legt an …' : 'Anlegen' }}</button>
 			</div>
 			<p v-if="projectError" class="deckghs-note deckghs-note-warn">{{ projectError }}</p>
+			<p v-if="repositoryError" class="deckghs-note deckghs-note-warn">{{ repositoryError }}</p>
 			<div class="deckghs-row">
 				<button v-if="projectMode === 'select' && status.connected" class="deckghs-btn" :disabled="projectsLoading" @click="loadProjects">Projects aktualisieren</button>
 				<button class="deckghs-btn" @click="projectMode = projectMode === 'select' ? 'manual' : 'select'">{{ projectMode === 'select' ? 'Project manuell eingeben' : 'Zur Project-Auswahl' }}</button>
@@ -152,13 +162,15 @@ export default {
 			mappings: [],
 			boards: [],
 			projects: [],
+			repositories: [],
+			repositoryError: '',
 			projectsLoading: false,
 			projectError: '',
 			projectMode: 'select',
 			selectedProjectId: '',
 			status: { connected: false, oauth: false },
 			pat: '',
-			form: { deckBoardId: 0, githubOwner: '', githubNumber: null, direction: 'both' },
+			form: { deckBoardId: 0, githubOwner: '', githubNumber: null, direction: 'both', githubRepository: '' },
 			results: {},
 			syncing: {},
 			checkingConnection: false,
@@ -198,7 +210,7 @@ export default {
 				}
 			}
 			if (this.status.connected) {
-				await this.loadProjects()
+				await Promise.all([this.loadProjects(), this.loadRepositories()])
 			}
 		} catch (e) {
 			this.error = 'Daten konnten nicht geladen werden.'
@@ -213,6 +225,16 @@ export default {
 	},
 	methods: {
 		apiUrl,
+		async loadRepositories() {
+			this.repositoryError = ''
+			try {
+				const { data } = await axios.get(apiUrl('/api/v1/github/repositories'))
+				this.repositories = Array.isArray(data) ? data : []
+			} catch (e) {
+				this.repositories = []
+				this.repositoryError = e.response?.data?.error || 'Repositories konnten nicht geladen werden.'
+			}
+		},
 		async refreshConnection() {
 			this.checkingConnection = true
 			this.error = ''
@@ -222,9 +244,10 @@ export default {
 				this.status = data
 				if (data.connected) {
 					this.notice = `GitHub-Verbindung bestätigt: ${data.login}.`
-					await this.loadProjects()
+					await Promise.all([this.loadProjects(), this.loadRepositories()])
 				} else {
 					this.projects = []
+					this.repositories = []
 					this.error = data.reason || 'GitHub-Verbindung konnte nicht bestätigt werden.'
 				}
 			} catch (e) {
@@ -270,7 +293,7 @@ export default {
 					: this.form
 				const { data } = await axios.post(apiUrl('/api/v1/mappings'), payload)
 				this.mappings.push(data)
-				this.form = { deckBoardId: 0, githubOwner: '', githubNumber: null, direction: 'both' }
+				this.form = { deckBoardId: 0, githubOwner: '', githubNumber: null, direction: 'both', githubRepository: '' }
 				this.selectedProjectId = ''
 				this.notice = 'Mapping angelegt.'
 			} catch (e) {
@@ -281,12 +304,18 @@ export default {
 		},
 		async update(m) {
 			try {
-				await axios.put(apiUrl(`/api/v1/mappings/${m.id}`), {
+				const { data } = await axios.put(apiUrl(`/api/v1/mappings/${m.id}`), {
 					direction: m.direction,
 					fieldConfig: m.fieldConfig,
+					githubRepository: m.githubRepository || '',
 				})
+				Object.assign(m, data)
 			} catch (e) {
-				this.error = 'Speichern fehlgeschlagen.'
+				this.error = e.response?.data?.error || 'Speichern fehlgeschlagen.'
+				try {
+					const { data } = await axios.get(apiUrl('/api/v1/mappings'))
+					this.mappings = Array.isArray(data) ? data : this.mappings
+				} catch (ignored) {}
 			}
 		},
 		async saveUsers(m) {
@@ -339,7 +368,7 @@ export default {
 				this.status = { connected: true, login: data.login, oauth: this.status.oauth }
 				this.pat = ''
 				this.notice = `Erfolgreich mit GitHub verbunden als ${data.login}.`
-				await this.loadProjects()
+				await Promise.all([this.loadProjects(), this.loadRepositories()])
 			} catch (e) {
 				const status = e.response?.status
 				this.error = e.response?.data?.error
@@ -356,6 +385,7 @@ export default {
 				await axios.delete(apiUrl('/api/v1/github/token'))
 				this.status = { connected: false, oauth: this.status.oauth }
 				this.projects = []
+				this.repositories = []
 				this.selectedProjectId = ''
 				this.projectError = ''
 				this.error = ''

@@ -10,6 +10,51 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
 class ProjectDiscoveryTest extends TestCase {
+	public function testAddsMissingStackStatusWithoutReplacingExistingOption(): void {
+		$client = $this->createMock(GithubClientService::class);
+		$client->expects($this->once())->method('graphql')->willReturnCallback(static function (string $uid, string $query, array $variables): array {
+			self::assertStringContainsString('updateProjectV2Field', $query);
+			self::assertSame('F1', $variables['field']);
+			self::assertSame('old-id', $variables['options'][0]['id']);
+			self::assertSame('In Arbeit', $variables['options'][1]['name']);
+			return ['data' => ['updateProjectV2Field' => ['projectV2Field' => ['options' => [
+				['id' => 'old-id', 'name' => 'To do'], ['id' => 'new-id', 'name' => 'In Arbeit'],
+			]]]]];
+		});
+		$service = new GithubProjectService($client, $this->createMock(LoggerInterface::class));
+		$options = $service->ensureStatusOptions('alice', 'F1', [[
+			'id' => 'F1', 'options' => [['id' => 'old-id', 'name' => 'To do', 'color' => 'GRAY', 'description' => '']]
+		]], ['To do', 'In Arbeit']);
+		$this->assertSame(['to do' => 'old-id', 'in arbeit' => 'new-id'], $options);
+	}
+
+	public function testCreatesMissingRoadmapDateFields(): void {
+		$client = $this->createMock(GithubClientService::class);
+		$client->expects($this->once())->method('graphql')->willReturnCallback(static function (string $uid, string $query, array $variables): array {
+			self::assertSame('Start date', $variables['name']);
+			self::assertStringContainsString('createProjectV2Field', $query);
+			return ['data' => ['createProjectV2Field' => ['projectV2Field' => ['id' => 'S1']]]];
+		});
+		$service = new GithubProjectService($client, $this->createMock(LoggerInterface::class));
+		$this->assertSame(['startDateFieldId' => 'S1', 'dateFieldId' => 'D1'], $service->ensureDateFields('alice', 'P1', '', 'D1'));
+	}
+
+	public function testConvertsDraftToIssueInSelectedRepository(): void {
+		$client = $this->createMock(GithubClientService::class);
+		$client->expects($this->once())->method('rest')->with('alice', 'GET', '/repos/org/repo')
+			->willReturn(['node_id' => 'R1', 'has_issues' => true, 'permissions' => ['push' => true]]);
+		$client->expects($this->once())->method('graphql')->willReturnCallback(static function (string $uid, string $query, array $vars): array {
+			self::assertStringContainsString('convertProjectV2DraftIssueItemToIssue', $query);
+			self::assertStringContainsString('__typename', $query);
+			self::assertSame(['item' => 'I1', 'repo' => 'R1'], $vars);
+			return ['data' => ['convertProjectV2DraftIssueItemToIssue' => ['item' => [
+				'id' => 'I1', 'content' => ['__typename' => 'Issue', 'number' => 7],
+			]]]];
+		});
+		$service = new GithubProjectService($client, $this->createMock(LoggerInterface::class));
+		$this->assertSame('Issue', $service->convertDraftToIssue('alice', 'I1', 'org/repo')['content']['__typename']);
+	}
+
 	public function testResolvesPersonalProjectWhenOrganizationLookupWouldFail(): void {
 		$client = $this->createMock(GithubClientService::class);
 		$client->expects($this->once())->method('graphql')

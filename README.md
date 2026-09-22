@@ -3,7 +3,7 @@
 Bidirektionale, pro Board und pro Feld konfigurierbare Synchronisation zwischen
 Nextcloud Deck und GitHub Projects v2.
 
-## Stand (0.4.7)
+## Stand (0.5.0)
 
 - OAuth-Login per Klick (+ PAT-Fallback), Token-Status, Boards-Dropdown
 - GitHub-Projects-Auswahl für eigenes Konto und Organisationen, mit manueller Eingabe als Ausweichmöglichkeit
@@ -12,6 +12,7 @@ Nextcloud Deck und GitHub Projects v2.
 - Persönliche und Organisations-Projects lassen sich nach der Auswahl als Mapping anlegen
 - Robustere Erkennung von Sync-Fehlern, sichere Draft-Verknüpfung, Kommentar-Paginierung, Schutz gegen doppelte Mappings und vollständige Mapping-Löschung
 - Ungenutzte Frontend-Abhängigkeiten entfernt; Produktions-Abhängigkeiten ohne bekannte npm-Audit-Funde
+- Deck-Listen und Project-Statusoptionen, Start-/Fälligkeitsdaten, Erledigt/Issue-Status, Labels und Kommentare in beide Richtungen; wählbares Issue-Repository statt Drafts
 - Redesignte Admin-/Personal-Einstellungen (nativ, `.mjs`-Module)
 - Sync: beide Richtungen für Anlage + Update, Last-Write-Wins, getrennte
   `deck_hash`/`github_hash` (idempotent, konvergiert), Titel-Dedup,
@@ -24,7 +25,7 @@ Nextcloud Deck und GitHub Projects v2.
   Kommentar-Sync und deaktivierte Draft-Felder korrigiert
 
 - User-Mapping `deckghs_usermap` pro Board (`PUT /api/v1/mappings/{id}/users`), Sync nutzt es für Assignees beide Richtungen
-- Due-Date via konfigurierbarer `dateFieldId` (erstes DATE-Feld auto-erkannt, pro Mapping änderbar), `DeckService::normalizeDue`
+- Start- und Fälligkeitsdatum über separate Project-Datumsfelder, `DeckService::normalizeDue`
 - PR-Items read-only: nie Push, bei Anlage `[GitHub PR, read-only]` + URL, kein Delete
 - Delete/Archive-Propagation: GitHub `archivedAt` → Deck-Archiv, GitHub gelöscht → Deck-Delete, Deck gelöscht → GitHub-Archiv; Hash inkl. Due/Labels/Assignees
 - Älter (0.2.0): GraphQL + Issues-REST, Last-Write-Wins, Webhook-Routing, Labels/Comments beide Richtungen

@@ -7,8 +7,8 @@ Basis: `/index.php/apps/deckgithubsync`, Auth: Nextcloud-Session (+ CSRF).
 | Methode | Pfad | Beschreibung |
 |---|---|---|
 | GET | `/api/v1/mappings` | Eigene Mappings listen |
-| POST | `/api/v1/mappings` | Anlegen (`deckBoardId`, `githubOwner`, `githubNumber`, `direction`, `fieldConfig`) – löst Project-ID + Feld-IDs auf |
-| PUT | `/api/v1/mappings/{id}` | Richtung, Feldconfig, `dateFieldId` ändern |
+| POST | `/api/v1/mappings` | Anlegen (`deckBoardId`, `githubOwner`, `githubNumber`, `direction`, `fieldConfig`, `githubRepository?`) – löst Project-ID + Feld-IDs auf |
+| PUT | `/api/v1/mappings/{id}` | Richtung, Feldconfig, `dateFieldId`, `githubRepository` ändern |
 | DELETE | `/api/v1/mappings/{id}` | Löschen |
 | PUT | `/api/v1/mappings/{id}/users` | Nutzer-Mapping setzen (`users: [{githubLogin, deckUid}]`) |
 
@@ -18,6 +18,7 @@ Basis: `/index.php/apps/deckgithubsync`, Auth: Nextcloud-Session (+ CSRF).
 |---|---|---|
 | GET | `/api/v1/deck/boards` | Eigene Deck-Boards (`id`, `title`) für Dropdowns |
 | GET | `/api/v1/github/projects` | Projects des verbundenen GitHub-Nutzers und seiner Organisationen (`id`, `owner`, `number`, `title`, `url`) |
+| GET | `/api/v1/github/repositories` | Repositories mit Issue-Schreibrecht für die Auswahl pro Mapping |
 | GET | `/api/v1/github/status` | `{connected, login?, invalid?, oauth}` |
 | PUT | `/api/v1/github/token` | PAT prüfen + speichern |
 | DELETE | `/api/v1/github/token` | Verbindung trennen |

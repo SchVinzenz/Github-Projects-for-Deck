@@ -51,7 +51,7 @@ class SettingsController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	public function createMapping(int $deckBoardId, string $githubOwner, int $githubNumber, string $direction = 'both', array $fieldConfig = []): DataResponse {
+	public function createMapping(int $deckBoardId, string $githubOwner, int $githubNumber, string $direction = 'both', array $fieldConfig = [], string $githubRepository = ''): DataResponse {
 		if (!in_array($direction, ['both', 'deck_to_github', 'github_to_deck'], true)) {
 			return new DataResponse(['error' => 'Invalid direction'], Http::STATUS_BAD_REQUEST);
 		}
@@ -67,6 +67,13 @@ class SettingsController extends Controller {
 		}
 		if ($projectId === null) {
 			return new DataResponse(['error' => 'GitHub Project wurde nicht gefunden. Owner und Project-Nummer prüfen.'], Http::STATUS_BAD_REQUEST);
+		}
+		if ($githubRepository !== '') {
+			try {
+				$this->projects->getRepositoryNodeId($this->userId ?? '', $githubRepository);
+			} catch (\Throwable) {
+				return new DataResponse(['error' => 'Das Issue-Repository ist nicht erreichbar oder kann keine Issues erstellen.'], Http::STATUS_BAD_REQUEST);
+			}
 		}
 		foreach ($this->maps->findByUser($this->userId ?? '') as $existing) {
 			if ($existing->getDeckBoardId() === $deckBoardId && $existing->getGithubProjectId() === $projectId) {
@@ -84,17 +91,19 @@ class SettingsController extends Controller {
 		$map->setGithubProjectId($projectId);
 		$map->setGithubOwner($githubOwner);
 		$map->setGithubNumber($githubNumber);
+		$map->setGithubRepository($githubRepository);
 		$map->setDirection($direction);
 		$map->setFieldConfig((string)json_encode($fieldConfig));
 		$map->setStatusFieldId($fields['statusFieldId']);
-		$map->setDateFieldId($fields['dateFieldId'] ?? '');
+		$map->setDateFieldId((string)($fields['dateFieldId'] ?? ''));
+		$map->setStartFieldId((string)($fields['startDateFieldId'] ?? ''));
 		$map->setLastSync(0);
 		$this->maps->insert($map);
 		return new DataResponse($this->serialize($map), Http::STATUS_CREATED);
 	}
 
 	#[NoAdminRequired]
-	public function updateMapping(int $id, ?string $direction = null, ?array $fieldConfig = null, ?string $dateFieldId = null): DataResponse {
+	public function updateMapping(int $id, ?string $direction = null, ?array $fieldConfig = null, ?string $dateFieldId = null, ?string $githubRepository = null): DataResponse {
 		try {
 			$map = $this->maps->findById($id);
 		} catch (\Exception) {
@@ -114,6 +123,16 @@ class SettingsController extends Controller {
 		}
 		if ($dateFieldId !== null) {
 			$map->setDateFieldId($dateFieldId);
+		}
+		if ($githubRepository !== null) {
+			if ($githubRepository !== '') {
+				try {
+					$this->projects->getRepositoryNodeId($this->userId ?? '', $githubRepository);
+				} catch (\Throwable) {
+					return new DataResponse(['error' => 'Das Issue-Repository ist nicht erreichbar oder kann keine Issues erstellen.'], Http::STATUS_BAD_REQUEST);
+				}
+			}
+			$map->setGithubRepository($githubRepository);
 		}
 		$this->maps->update($map);
 		return new DataResponse($this->serialize($map));
@@ -198,6 +217,15 @@ class SettingsController extends Controller {
 	}
 
 	#[NoAdminRequired]
+	public function listRepositories(): DataResponse {
+		try {
+			return new DataResponse($this->projects->listAvailableRepositories($this->userId ?? ''));
+		} catch (\Throwable) {
+			return new DataResponse(['error' => 'GitHub-Repositories konnten nicht geladen werden.'], Http::STATUS_BAD_GATEWAY);
+		}
+	}
+
+	#[NoAdminRequired]
 	public function githubStatus(): DataResponse {
 		$oauth = $this->config->getAppValue('deckgithubsync', 'oauth_client_id', '') !== ''
 			&& $this->config->getAppValue('deckgithubsync', 'oauth_client_secret', '') !== '';
@@ -252,6 +280,7 @@ class SettingsController extends Controller {
 			'deckBoardId' => $m->getDeckBoardId(),
 			'githubOwner' => $m->getGithubOwner(),
 			'githubNumber' => $m->getGithubNumber(),
+			'githubRepository' => $m->getGithubRepository(),
 			'direction' => $m->getDirection(),
 			'fieldConfig' => $m->getFieldMap(),
 			'dateFieldId' => $m->getDateFieldId(),

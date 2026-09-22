@@ -12,10 +12,10 @@
 
 * Deck board ↔ GitHub Project v2 (org/user)
 * Stack ↔ Status field option, Card ↔ DraftIssue/Issue
-* Title, description, labels, assignees, due date, comments
+* Title, description, labels, assignees, start/due dates, done state, comments
 * GitHub App (installation token), OAuth login or personal token
 * Webhook (projects_v2_item) + background job fallback]]></description>
-	<version>0.4.7</version>
+	<version>0.5.0</version>
 	<licence>agpl</licence>
 	<author>Nextcloud contributors</author>
 	<namespace>DeckGithubSync</namespace>

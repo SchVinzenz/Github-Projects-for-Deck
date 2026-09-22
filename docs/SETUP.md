@@ -69,11 +69,25 @@ App dient als Fallback für Sync ohne nutzbares persönliches Token.
 ## Mapping anlegen
 
 Persönliche Einstellungen → *Neues Mapping*: Deck-Board und ein automatisch
-geladenes GitHub Project wählen, Richtung wählen, anlegen. Falls ein Project
+geladenes GitHub Project wählen, Richtung wählen und ein **Issue-Repository**
+aus den Vorschlägen wählen. Ohne Repository legt die App weiterhin Project-Drafts
+an. Wird ein Repository bei einem bestehenden Mapping eingetragen, werden
+bereits verknüpfte Drafts beim nächsten Sync in Issues in diesem Repository
+umgewandelt. Falls ein Project
 nicht in der Liste erscheint, können Owner und Project-Nummer weiter manuell
 eingegeben werden. Danach optional pro
-Feld (Titel, Beschreibung, Status, Labels, Assignees, Fälligkeit, Kommentare)
+Feld (Titel, Beschreibung, Status, Labels, Assignees, Start-/Fälligkeitsdatum, Kommentare)
 die Richtung feintunen sowie GitHub-Logins auf Deck-Benutzer mappen.
+
+Deck-Listen werden als Optionen des GitHub-Project-Felds **Status** angelegt;
+GitHub-Statusoptionen werden als Deck-Listen angelegt. Die GitHub-Board-Ansicht
+muss nach **Status** gruppiert sein, damit jede Liste als Spalte erscheint.
+Die App legt fehlende Project-Datumsfelder **Start date** und **Due date** an
+und synchronisiert sie mit Start- und Fälligkeitsdatum der Deck-Karte. In der
+GitHub-Roadmap-Ansicht diese beiden Felder als Start- und Zieldatum auswählen.
+Ein in Deck erledigter Karte entsprechendes Issue wird geschlossen und beim
+Zurücksetzen wieder geöffnet. Bereits vorhandene GitHub-Issues werden nicht
+in ein anderes Repository verschoben.
 
 ## Webhook (optional, für Echtzeit)
 

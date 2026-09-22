@@ -48,6 +48,37 @@ class GithubProjectService {
 		return $res['data'][$field]['projectV2']['id'] ?? null;
 	}
 
+	/** Repositories where the connected user can create issues. */
+	public function listAvailableRepositories(string $userId): array {
+		if ($this->client->getUserAccessToken($userId) === '') {
+			throw new \RuntimeException('Connect a GitHub account to list repositories');
+		}
+		$repos = [];
+		$page = 1;
+		do {
+			$data = $this->client->rest($userId, 'GET', '/user/repos?per_page=100&page=' . $page . '&affiliation=owner,collaborator,organization_member');
+			foreach ($data as $repo) {
+				if (!empty($repo['full_name']) && ($repo['has_issues'] ?? false) && ($repo['permissions']['push'] ?? false)) {
+					$repos[$repo['full_name']] = $repo['full_name'];
+				}
+			}
+			$page++;
+		} while (count($data) === 100);
+		natcasesort($repos);
+		return array_values($repos);
+	}
+
+	public function getRepositoryNodeId(string $userId, string $repository): string {
+		if (!preg_match('/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/', $repository)) {
+			throw new \InvalidArgumentException('Invalid GitHub repository');
+		}
+		$repo = $this->client->rest($userId, 'GET', '/repos/' . $repository);
+		if (empty($repo['node_id']) || !($repo['has_issues'] ?? false) || !($repo['permissions']['push'] ?? false)) {
+			throw new \RuntimeException('Repository is unavailable or issues cannot be created');
+		}
+		return (string)$repo['node_id'];
+	}
+
 	/** Projects owned by the connected user and their organizations. */
 	public function listAvailableProjects(string $userId): array {
 		$owners = [];
@@ -118,16 +149,17 @@ class GithubProjectService {
 		return $projects;
 	}
 
-	/** @return array{fields: array, statusFieldId: string, dateFieldId: string, options: array} */
+	/** @return array{fields: array, statusFieldId: string, dateFieldId: string, startDateFieldId: string, options: array} */
 	public function getFields(string $userId, string $projectId): array {
-		$q = 'query($pid:ID!){ node(id:$pid){ ... on ProjectV2{ fields(first:50){ nodes{
+		$q = 'query($pid:ID!){ node(id:$pid){ ... on ProjectV2{ fields(first:100){ nodes{
 			... on ProjectV2FieldCommon{ __typename id name dataType }
-			... on ProjectV2SingleSelectField{ id name options{ id name color } }
+			... on ProjectV2SingleSelectField{ id name options{ id name color description } }
 		} } } } }';
 		$res = $this->client->graphql($userId, $q, ['pid' => $projectId]);
 		$nodes = $res['data']['node']['fields']['nodes'] ?? [];
 		$statusFieldId = '';
 		$dateFieldId = '';
+		$startDateFieldId = '';
 		$options = [];
 		foreach ($nodes as $f) {
 			if (($f['name'] ?? '') === 'Status' && isset($f['options'])) {
@@ -136,11 +168,84 @@ class GithubProjectService {
 					$options[$o['name']] = $o['id'];
 				}
 			}
-			if ($dateFieldId === '' && ($f['dataType'] ?? '') === 'DATE') {
-				$dateFieldId = $f['id'];
+			if (($f['dataType'] ?? '') === 'DATE') {
+				$name = mb_strtolower((string)($f['name'] ?? ''));
+				if (str_contains($name, 'start')) {
+					$startDateFieldId = $f['id'];
+				} elseif (str_contains($name, 'due') || str_contains($name, 'target') || str_contains($name, 'end') || str_contains($name, 'fällig')) {
+					$dateFieldId = $f['id'];
+				}
 			}
 		}
-		return ['fields' => $nodes, 'statusFieldId' => $statusFieldId, 'dateFieldId' => $dateFieldId, 'options' => $options];
+		return ['fields' => $nodes, 'statusFieldId' => $statusFieldId, 'dateFieldId' => $dateFieldId, 'startDateFieldId' => $startDateFieldId, 'options' => $options];
+	}
+
+	/** Roadmap and Deck Gantt use separate start and due date fields. */
+	public function ensureDateFields(string $userId, string $projectId, string $startFieldId, string $dueFieldId): array {
+		if ($startFieldId === '') {
+			$startFieldId = $this->createDateField($userId, $projectId, 'Start date');
+		}
+		if ($dueFieldId === '') {
+			$dueFieldId = $this->createDateField($userId, $projectId, 'Due date');
+		}
+		return ['startDateFieldId' => $startFieldId, 'dateFieldId' => $dueFieldId];
+	}
+
+	private function createDateField(string $userId, string $projectId, string $name): string {
+		$q = 'mutation($project:ID!,$name:String!){ createProjectV2Field(input:{projectId:$project name:$name dataType:DATE}){ projectV2Field{ ... on ProjectV2FieldCommon{id} } } }';
+		$res = $this->client->graphql($userId, $q, ['project' => $projectId, 'name' => $name]);
+		$id = (string)($res['data']['createProjectV2Field']['projectV2Field']['id'] ?? '');
+		if ($id === '') {
+			throw new \RuntimeException('GitHub date field could not be created: ' . $name);
+		}
+		return $id;
+	}
+
+	/** Add missing Deck stack names as Status options while preserving existing option IDs and values. */
+	public function ensureStatusOptions(string $userId, string $statusFieldId, array $fields, array $stackTitles): array {
+		$statusField = null;
+		foreach ($fields as $field) {
+			if (($field['id'] ?? '') === $statusFieldId) {
+				$statusField = $field;
+				break;
+			}
+		}
+		if ($statusField === null || !isset($statusField['options'])) {
+			throw new \RuntimeException('GitHub Project has no editable Status field');
+		}
+		$options = [];
+		$input = [];
+		foreach ($statusField['options'] as $option) {
+			$options[mb_strtolower($option['name'])] = $option['id'];
+			$input[] = [
+				'id' => $option['id'], 'name' => $option['name'],
+				'color' => $option['color'] ?? 'GRAY', 'description' => $option['description'] ?? '',
+			];
+		}
+		$missing = false;
+		foreach ($stackTitles as $title) {
+			$title = trim((string)$title);
+			if ($title === '' || isset($options[mb_strtolower($title)])) {
+				continue;
+			}
+			$input[] = ['name' => $title, 'color' => 'GRAY', 'description' => 'Nextcloud Deck'];
+			$options[mb_strtolower($title)] = '';
+			$missing = true;
+		}
+		if (!$missing) {
+			return $options;
+		}
+		$q = 'mutation($field:ID!,$options:[ProjectV2SingleSelectFieldOptionInput!]){ updateProjectV2Field(input:{fieldId:$field singleSelectOptions:$options}){ projectV2Field{ ... on ProjectV2SingleSelectField{ options{id name} } } } }';
+		$res = $this->client->graphql($userId, $q, ['field' => $statusFieldId, 'options' => $input]);
+		$updated = $res['data']['updateProjectV2Field']['projectV2Field']['options'] ?? null;
+		if (!is_array($updated)) {
+			throw new \RuntimeException('GitHub Status options could not be updated');
+		}
+		$result = [];
+		foreach ($updated as $option) {
+			$result[mb_strtolower($option['name'])] = $option['id'];
+		}
+		return $result;
 	}
 
 	/** @return array{items: array, hasNext: bool, cursor: ?string} */
@@ -150,8 +255,8 @@ class GithubProjectService {
 			nodes{ id updatedAt
 				content{ __typename
 					... on DraftIssue{ id title body updatedAt }
-					... on Issue{ id number title body state closed url repository{nameWithOwner} assignees(first:100){nodes{login}} labels(first:100){nodes{name}} }
-					... on PullRequest{ id number title body state merged url }
+					... on Issue{ id number title body state closed updatedAt url repository{nameWithOwner} assignees(first:100){nodes{login} pageInfo{hasNextPage}} labels(first:100){nodes{name} pageInfo{hasNextPage}} }
+					... on PullRequest{ id number title body state merged updatedAt url }
 				}
 				fieldValues(first:100){ nodes{ __typename
 					... on ProjectV2ItemFieldSingleSelectValue{ name optionId field{ ... on ProjectV2FieldCommon{ id name } } }
@@ -179,6 +284,18 @@ class GithubProjectService {
 		$m = 'mutation($pid:ID!,$t:String!,$b:String!){ addProjectV2DraftIssue(input:{projectId:$pid title:$t body:$b}){ projectItem{ id } } }';
 		$res = $this->client->graphql($userId, $m, ['pid' => $projectId, 't' => $title, 'b' => $body]);
 		return $res['data']['addProjectV2DraftIssue']['projectItem']['id'] ?? null;
+	}
+
+	/** Convert a Project draft in place so the Project item keeps its Status and dates. */
+	public function convertDraftToIssue(string $userId, string $itemId, string $repository): array {
+		$repositoryId = $this->getRepositoryNodeId($userId, $repository);
+		$q = 'mutation($item:ID!,$repo:ID!){ convertProjectV2DraftIssueItemToIssue(input:{itemId:$item repositoryId:$repo}){ item{ id updatedAt content{ __typename ... on Issue{ id number title body state closed updatedAt url repository{nameWithOwner} labels(first:100){nodes{name} pageInfo{hasNextPage}} assignees(first:100){nodes{login} pageInfo{hasNextPage}} } } fieldValues(first:100){nodes{ ... on ProjectV2ItemFieldSingleSelectValue{ name optionId field{ ... on ProjectV2FieldCommon{id name} } } ... on ProjectV2ItemFieldDateValue{ date field{ ... on ProjectV2FieldCommon{id name} } } } } } }';
+		$res = $this->client->graphql($userId, $q, ['item' => $itemId, 'repo' => $repositoryId]);
+		$item = $res['data']['convertProjectV2DraftIssueItemToIssue']['item'] ?? null;
+		if (!is_array($item) || empty($item['id']) || empty($item['content']['number'])) {
+			throw new \RuntimeException('GitHub draft could not be converted to an issue');
+		}
+		return $item;
 	}
 
 	public function updateDraft(string $userId, string $itemId, string $draftContentId, string $title, string $body): void {
@@ -213,7 +330,7 @@ class GithubProjectService {
 		$this->client->graphql($userId, $m, ['pid' => $projectId, 'item' => $itemId]);
 	}
 
-	public static function dateOf(array $item, string $dateFieldId = ''): ?string {
+	public static function dateOf(array $item, ?string $dateFieldId = ''): ?string {
 		foreach ($item['fieldValues']['nodes'] ?? [] as $fv) {
 			if (($fv['__typename'] ?? '') !== 'ProjectV2ItemFieldDateValue') {
 				continue;
@@ -232,7 +349,32 @@ class GithubProjectService {
 	}
 
 	public function setIssueLabels(string $userId, string $repo, int $number, array $labels): void {
+		$this->ensureRepositoryLabels($userId, $repo, $labels);
 		$this->client->rest($userId, 'PUT', '/repos/' . $repo . '/issues/' . $number . '/labels', ['labels' => array_values($labels)]);
+	}
+
+	private function ensureRepositoryLabels(string $userId, string $repo, array $labels): void {
+		if ($labels === []) {
+			return;
+		}
+		$known = [];
+		$page = 1;
+		do {
+			$data = $this->client->rest($userId, 'GET', '/repos/' . $repo . '/labels?per_page=100&page=' . $page);
+			foreach ($data as $entry) {
+				if (isset($entry['name'])) {
+					$known[mb_strtolower($entry['name'])] = true;
+				}
+			}
+			$page++;
+		} while (count($data) === 100);
+		foreach ($labels as $label) {
+			$name = trim((string)$label);
+			if ($name !== '' && !isset($known[mb_strtolower($name)])) {
+				$this->client->rest($userId, 'POST', '/repos/' . $repo . '/labels', ['name' => $name, 'color' => '6f42c1', 'description' => 'Nextcloud Deck']);
+				$known[mb_strtolower($name)] = true;
+			}
+		}
 	}
 
 	public function setIssueAssignees(string $userId, string $repo, int $number, array $assignees): void {
