@@ -3,33 +3,27 @@
 Bidirektionale, pro Board und pro Feld konfigurierbare Synchronisation zwischen
 Nextcloud Deck und GitHub Projects v2.
 
-## Stand (0.2.0 – erweiterter Sync)
+## Stand (0.3.0)
 
-- App-Gerüst für Nextcloud 30–36, Namespace `OCA\DeckGithubSync`
-- DB: `deckghs_boardmap` (Board ↔ Project + Richtung + Feldconfig) und `deckghs_itemmap` (Card ↔ Item)
-- GitHub App Auth: JWT (RS256, OpenSSL) → Installation Token (1h, gecacht) → GraphQL + REST, Fallback User-PAT
-- Projects v2 GraphQL: Projekt auflösen, Fields/Status-Optionen, Items paginiert, Draft anlegen/updaten, Status/Date setzen, Löschen
-- Issues REST: Titel/Body/State, Labels setzen, Assignees setzen, Comments lesen/schreiben
-- Deck: interne `BoardService/StackService/CardService` im User-Kontext, Full-Roundtrip-Update, Labels/Assignees/Comments defensiv via `method_exists`
-- Sync: beide Richtungen für Anlage + Update, Last-Write-Wins (`lastModified` vs `updatedAt`), Hash-Loop-Schutz, Richtung `both|deck_to_github|github_to_deck|off` pro Board und pro Feld (title, description, status, labels, assignees, due, comments)
-- Webhook `/webhook/github` mit HMAC-Prüfung + Bot-Filter + Routing via `project_node_id` → Map auf `last_sync=0`, Ausführung via `SyncJob`
-- BackgroundJob `SyncJob` (≥300s) + occ `deckgithubsync:sync [map-id]`
-- Admin-/Personal-Settings + Vue UI (Richtung + Feldmatrix + manueller Sync)
-- Unit-Test `MappingTest` (Felddefaults, Status-, Label-, Assignee-Extraktion)
+- User-Mapping `deckghs_usermap` pro Board (`PUT /api/v1/mappings/{id}/users`), Sync nutzt es für Assignees beide Richtungen
+- Due-Date via konfigurierbarer `dateFieldId` (erstes DATE-Feld auto-erkannt, pro Mapping änderbar), `DeckService::normalizeDue`
+- PR-Items read-only: nie Push, bei Anlage `[GitHub PR, read-only]` + URL, kein Delete
+- Delete/Archive-Propagation: GitHub `archivedAt` → Deck-Archiv, GitHub gelöscht → Deck-Delete, Deck gelöscht → GitHub-Archiv; Hash inkl. Due/Labels/Assignees
+- Älter (0.2.0): GraphQL + Issues-REST, Last-Write-Wins, Webhook-Routing, Labels/Comments beide Richtungen
 
-## Mapping (erweitert)
+## Mapping
 
 | Deck | GitHub | Stand |
 |---|---|---|
-| Stack | Status-Option (ID, nicht Name) | ✅ beide Richtungen |
-| Card Titel/Beschreibung | DraftIssue + Issue title/body | ✅ beide Richtungen |
-| Label | Issue-Label (REST) | ✅ beide Richtungen |
-| Assignee | Issue-Assignee (REST, Deck-Seite nur via User-ID) | ✅ Deck→GitHub; GitHub→Deck TODO (Login→UID Mapping) |
-| Kommentar | Issue-Comment (REST, `[Deck]`/`[GitHub user]` Präfix) | ✅ beide Richtungen, Duplikat-Schutz |
-| Fälligkeitsdatum | Date-Field | ✅ `setDate` / clear |
-| Anhang | — | TODO: kein Projects-Äquivalent |
-
-Offen: GitHub-User ↔ Deck-User Mapping-Tabelle, Due-Date Custom-Field-ID Config, PR-Items (read-only), Archiv/Delete-Propagation.
+| Stack | Status-Option (ID) | ✅ |
+| Titel/Beschreibung | DraftIssue + Issue | ✅ |
+| Label | Issue-Label (REST) | ✅ |
+| Assignee | via User-Mapping Tabelle | ✅ (ohne Mapping wird übersprungen) |
+| Kommentar | Issue-Comment (`[Deck]`/`[GitHub user]`) | ✅ |
+| Due | Date-Field (`dateFieldId`) | ✅ |
+| Archiv/Delete | Archiv/Delete | ✅ |
+| PR | read-only Card | ✅ |
+| Anhang | — | TODO |
 
 ## Setup
 

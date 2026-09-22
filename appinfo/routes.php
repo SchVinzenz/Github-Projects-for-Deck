@@ -15,6 +15,7 @@ return [
 		['name' => 'settings#createMapping', 'url' => '/api/v1/mappings', 'verb' => 'POST'],
 		['name' => 'settings#updateMapping', 'url' => '/api/v1/mappings/{id}', 'verb' => 'PUT'],
 		['name' => 'settings#deleteMapping', 'url' => '/api/v1/mappings/{id}', 'verb' => 'DELETE'],
+		['name' => 'settings#setUserMap', 'url' => '/api/v1/mappings/{id}/users', 'verb' => 'PUT'],
 		['name' => 'sync#trigger', 'url' => '/api/v1/sync/{id}', 'verb' => 'POST'],
 		['name' => 'sync#status', 'url' => '/api/v1/sync/{id}/status', 'verb' => 'GET'],
 		['name' => 'webhook#github', 'url' => '/webhook/github', 'verb' => 'POST'],

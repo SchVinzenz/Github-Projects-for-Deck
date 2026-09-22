@@ -13,17 +13,20 @@ use OCA\DeckGithubSync\Db\BoardMap;
 use OCA\DeckGithubSync\Db\BoardMapMapper;
 use OCA\DeckGithubSync\Db\ItemMap;
 use OCA\DeckGithubSync\Db\ItemMapMapper;
+use OCA\DeckGithubSync\Db\UserMapMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 use Psr\Log\LoggerInterface;
 
 /**
  * Bidirectional sync with per-board direction + per-field directions.
- * Loop protection: sync hash over mapped fields + updatedAt comparison.
+ * Loop protection: sync hash + last-write-wins via timestamps.
+ * PR items are read-only (GitHub -> Deck only).
  */
 class SyncService {
 	public function __construct(
 		private BoardMapMapper $boardMaps,
 		private ItemMapMapper $itemMaps,
+		private UserMapMapper $userMaps,
 		private DeckService $deck,
 		private GithubProjectService $github,
 		private LoggerInterface $logger,
@@ -56,7 +59,16 @@ class SyncService {
 
 		$fields = $this->github->getFields($userId, $map->getGithubProjectId());
 		$statusFieldId = $map->getStatusFieldId() !== '' ? $map->getStatusFieldId() : $fields['statusFieldId'];
+		$dateFieldId = $map->getDateFieldId() !== '' ? $map->getDateFieldId() : ($fields['dateFieldId'] ?? '');
+		if ($map->getStatusFieldId() === '' && $statusFieldId !== '') {
+			$map->setStatusFieldId($statusFieldId);
+		}
+		if ($map->getDateFieldId() === '' && $dateFieldId !== '') {
+			$map->setDateFieldId($dateFieldId);
+		}
 		$options = $fields['options']; // name => id
+
+		$userMap = $this->loadUserMap($map->getId()); // githubLogin(lower) => deckUid + reverse
 
 		$githubItems = [];
 		$after = null;
@@ -86,14 +98,17 @@ class SyncService {
 					}
 					if ($existing !== null && isset($githubItems[$existing->getGithubItemId()])) {
 						$gItem = $githubItems[$existing->getGithubItemId()];
+						if (($gItem['content']['__typename'] ?? '') === 'PullRequest') {
+							continue; // PRs are read-only, never push
+						}
 						if ($allowToDeck && $allowToGithub && $this->newerSide($card, $gItem) === 'github') {
-							$this->pullGithubToDeck($map, $userId, $card, $gItem, $fieldMap, $stackByTitle);
+							$this->pullGithubToDeck($map, $userId, $card, $gItem, $fieldMap, $stackByTitle, $dateFieldId, $userMap);
 							$existing->setSyncHash($this->hashDeck($this->findDeckCard($card['id'], $deckCards) ?? $card));
 							$this->itemMaps->update($existing);
 							$stats['github_to_deck']++;
 							continue;
 						}
-						$this->pushDeckToGithub($map, $userId, $card, $gItem, $fieldMap, $statusFieldId, $options, $stackById);
+						$this->pushDeckToGithub($map, $userId, $card, $gItem, $fieldMap, $statusFieldId, $options, $stackById, $dateFieldId, $userMap);
 						$existing->setSyncHash($hash);
 						$this->itemMaps->update($existing);
 					} else {
@@ -104,6 +119,12 @@ class SyncService {
 						$stackTitle = $stackById[$card['stackId']] ?? '';
 						if ($this->fieldAllowed($fieldMap, 'status', BoardMap::DIR_TO_GITHUB) && $stackTitle !== '' && isset($options[$stackTitle]) && $statusFieldId !== '') {
 							$this->github->setStatus($userId, $map->getGithubProjectId(), $itemId, $statusFieldId, $options[$stackTitle]);
+						}
+						if ($this->fieldAllowed($fieldMap, 'due', BoardMap::DIR_TO_GITHUB) && $dateFieldId !== '') {
+							$deckDue = DeckService::normalizeDue($card['duedate'] ?? null);
+							if ($deckDue !== null) {
+								$this->github->setDate($userId, $map->getGithubProjectId(), $itemId, $dateFieldId, $deckDue);
+							}
 						}
 						$im = new ItemMap();
 						$im->setMapId($map->getId());
@@ -137,7 +158,7 @@ class SyncService {
 						if ($allowToGithub && $this->newerSide($card, $item) === 'deck') {
 							continue; // deck wins, handled in Deck->GitHub pass
 						}
-						$this->pullGithubToDeck($map, $userId, $card, $item, $fieldMap, $stackByTitle);
+						$this->pullGithubToDeck($map, $userId, $card, $item, $fieldMap, $stackByTitle, $dateFieldId, $userMap);
 						$link->setSyncHash($this->hashGithub($item));
 						$this->itemMaps->update($link);
 						$stats['github_to_deck']++;
@@ -146,12 +167,22 @@ class SyncService {
 					$content = $item['content'] ?? [];
 					$title = $content['title'] ?? ('GitHub item ' . substr($itemId, 0, 8));
 					$body = $content['body'] ?? '';
+					if (($content['__typename'] ?? '') === 'PullRequest') {
+						$body .= "\n\n[GitHub PR, read-only: " . ($content['url'] ?? '') . ']';
+					}
 					$status = GithubProjectService::statusOf($item);
 					$targetStack = $stackByTitle[strtolower($status)] ?? reset($stacks)['id'] ?? null;
 					if ($targetStack === null) {
 						continue;
 					}
-					$cardId = $this->deck->createCard($userId, (int)$targetStack, $title, $body);
+					$due = $this->fieldAllowed($fieldMap, 'due', BoardMap::DIR_TO_DECK) ? GithubProjectService::dateOf($item, $dateFieldId) : null;
+					$cardId = $this->deck->createCard($userId, (int)$targetStack, $title, $body, $due);
+					if ($this->fieldAllowed($fieldMap, 'labels', BoardMap::DIR_TO_DECK)) {
+						$ghLabels = GithubProjectService::labelsOf($item);
+						if ($ghLabels !== []) {
+							$this->deck->syncLabels($userId, $map->getDeckBoardId(), $cardId, $ghLabels);
+						}
+					}
 					$im = new ItemMap();
 					$im->setMapId($map->getId());
 					$im->setDeckCardId($cardId);
@@ -167,14 +198,20 @@ class SyncService {
 			}
 		}
 
+		$prop = $this->propagateDeletions($map, $userId, $deckCards, $githubItems, $known, $allowToGithub, $allowToDeck, $fieldMap);
+		$stats = array_merge($stats, $prop);
+
 		$map->setLastSync(time());
 		$this->boardMaps->update($map);
 		return $stats;
 	}
 
-	private function pushDeckToGithub(BoardMap $map, string $userId, array $card, array $gItem, array $fieldMap, string $statusFieldId, array $options, array $stackById = []): void {
+	private function pushDeckToGithub(BoardMap $map, string $userId, array $card, array $gItem, array $fieldMap, string $statusFieldId, array $options, array $stackById = [], string $dateFieldId = '', array $userMap = []): void {
 		$content = $gItem['content'] ?? [];
 		$type = $content['__typename'] ?? 'DraftIssue';
+		if ($type === 'PullRequest') {
+			return; // read-only
+		}
 		if ($type === 'DraftIssue') {
 			if ($this->fieldAllowed($fieldMap, 'title', BoardMap::DIR_TO_GITHUB) || $this->fieldAllowed($fieldMap, 'description', BoardMap::DIR_TO_GITHUB)) {
 				$this->github->updateDraft($userId, $gItem['id'], $content['id'] ?? '', $card['title'], $card['description']);
@@ -199,9 +236,29 @@ class SyncService {
 						$this->github->setIssueLabels($userId, $repo, $number, $card['labels'] ?? []);
 					}
 				}
+				if ($this->fieldAllowed($fieldMap, 'assignees', BoardMap::DIR_TO_GITHUB) && $userMap !== []) {
+					$ghLogins = array_map('strtolower', GithubProjectService::assigneesOf($gItem));
+					$wantLogins = [];
+					foreach ($card['assignedUsers'] ?? [] as $uid) {
+						$login = $userMap['deck2gh'][strtolower((string)$uid)] ?? null;
+						if ($login !== null) {
+							$wantLogins[] = strtolower($login);
+						}
+					}
+					if (array_diff($wantLogins, $ghLogins) !== [] || array_diff($ghLogins, $wantLogins) !== []) {
+						$this->github->setIssueAssignees($userId, $repo, $number, array_values(array_unique($wantLogins)));
+					}
+				}
 				if ($this->fieldAllowed($fieldMap, 'comments', BoardMap::DIR_TO_GITHUB)) {
 					$this->pushMissingComments($userId, $card, $repo, $number);
 				}
+			}
+		}
+		if ($this->fieldAllowed($fieldMap, 'due', BoardMap::DIR_TO_GITHUB) && $dateFieldId !== '') {
+			$deckDue = DeckService::normalizeDue($card['duedate'] ?? null);
+			$ghDue = GithubProjectService::dateOf($gItem, $dateFieldId);
+			if ($deckDue !== $ghDue) {
+				$this->github->setDate($userId, $map->getGithubProjectId(), $gItem['id'], $dateFieldId, $deckDue);
 			}
 		}
 		$stackTitle = $stackById[$card['stackId']] ?? '';
@@ -254,7 +311,7 @@ class SyncService {
 		return null;
 	}
 
-	private function pullGithubToDeck(BoardMap $map, string $userId, array $card, array $gItem, array $fieldMap, array $stackByTitle): void {
+	private function pullGithubToDeck(BoardMap $map, string $userId, array $card, array $gItem, array $fieldMap, array $stackByTitle, string $dateFieldId = '', array $userMap = []): void {
 		$content = $gItem['content'] ?? [];
 		$patch = [];
 		if ($this->fieldAllowed($fieldMap, 'title', BoardMap::DIR_TO_DECK) && isset($content['title']) && $content['title'] !== $card['title']) {
@@ -262,6 +319,13 @@ class SyncService {
 		}
 		if ($this->fieldAllowed($fieldMap, 'description', BoardMap::DIR_TO_DECK) && isset($content['body']) && $content['body'] !== ($card['description'] ?? '')) {
 			$patch['description'] = $content['body'];
+		}
+		if ($this->fieldAllowed($fieldMap, 'due', BoardMap::DIR_TO_DECK) && $dateFieldId !== '') {
+			$ghDue = GithubProjectService::dateOf($gItem, $dateFieldId);
+			$deckDue = DeckService::normalizeDue($card['duedate'] ?? null);
+			if ($ghDue !== $deckDue) {
+				$patch['duedate'] = $ghDue;
+			}
 		}
 		if ($this->fieldAllowed($fieldMap, 'status', BoardMap::DIR_TO_DECK)) {
 			$status = GithubProjectService::statusOf($gItem);
@@ -276,6 +340,18 @@ class SyncService {
 			$ghLabels = GithubProjectService::labelsOf($gItem);
 			if ($ghLabels !== []) {
 				$this->deck->syncLabels($userId, $map->getDeckBoardId(), (int)$card['id'], $ghLabels);
+			}
+		}
+		if ($this->fieldAllowed($fieldMap, 'assignees', BoardMap::DIR_TO_DECK) && $userMap !== []) {
+			$deckUids = [];
+			foreach (GithubProjectService::assigneesOf($gItem) as $login) {
+				$uid = $userMap['gh2deck'][strtolower($login)] ?? null;
+				if ($uid !== null) {
+					$deckUids[] = $uid;
+				}
+			}
+			if ($deckUids !== []) {
+				$this->deck->syncAssignees($userId, (int)$card['id'], $deckUids);
 			}
 		}
 		if ($this->fieldAllowed($fieldMap, 'comments', BoardMap::DIR_TO_DECK)
@@ -305,7 +381,7 @@ class SyncService {
 		return hash('sha256', implode('|', [
 			$card['title'] ?? '', $card['description'] ?? '',
 			(string)($card['stackId'] ?? ''), (string)($card['duedate'] ?? ''),
-			implode(',', $card['labels'] ?? []),
+			implode(',', $card['labels'] ?? []), implode(',', $card['assignedUsers'] ?? []),
 		]));
 	}
 
@@ -313,6 +389,9 @@ class SyncService {
 		$c = $item['content'] ?? [];
 		return hash('sha256', implode('|', [
 			$c['title'] ?? '', $c['body'] ?? '', GithubProjectService::statusOf($item),
+			(string)(GithubProjectService::dateOf($item) ?? ''),
+			implode(',', GithubProjectService::labelsOf($item)),
+			implode(',', GithubProjectService::assigneesOf($item)),
 		]));
 	}
 
@@ -322,5 +401,65 @@ class SyncService {
 			throw new DoesNotExistException('Not found');
 		}
 		return $map;
+	}
+
+	/** @return array{gh2deck: array<string,string>, deck2gh: array<string,string>} */
+	private function loadUserMap(int $mapId): array {
+		$gh2deck = [];
+		$deck2gh = [];
+		try {
+			foreach ($this->userMaps->findByMap($mapId) as $um) {
+				$gh2deck[strtolower($um->getGithubLogin())] = $um->getDeckUid();
+				$deck2gh[strtolower($um->getDeckUid())] = $um->getGithubLogin();
+			}
+		} catch (\Throwable $e) {
+			$this->logger->debug('deckgithubsync: usermap load failed', ['exception' => $e]);
+		}
+		return ['gh2deck' => $gh2deck, 'deck2gh' => $deck2gh];
+	}
+
+	/**
+	 * Propagate deletes/archives both ways for linked items missing on one side.
+	 * @param array<int,array> $deckCards
+	 * @param array<string,array> $githubItems
+	 */
+	private function propagateDeletions(BoardMap $map, string $userId, array $deckCards, array $githubItems, array $known, bool $allowToGithub, bool $allowToDeck, array $fieldMap): array {
+		$stats = ['archived_to_deck' => 0, 'deleted_to_github' => 0, 'deleted_to_deck' => 0];
+		$deckIds = [];
+		foreach ($deckCards as $c) {
+			$deckIds[(int)$c['id']] = true;
+		}
+		foreach ($known as $key => $link) {
+			if (!str_starts_with($key, 'deck:')) {
+				continue;
+			}
+			try {
+				$cardId = $link->getDeckCardId();
+				$itemId = $link->getGithubItemId();
+				$deckGone = !isset($deckIds[$cardId]);
+				$ghGone = !isset($githubItems[$itemId]);
+				$ghArchived = isset($githubItems[$itemId]) && !empty($githubItems[$itemId]['archivedAt']);
+				if ($ghArchived && $allowToDeck && !$deckGone) {
+					$this->deck->archiveCard($userId, $cardId, true);
+					$stats['archived_to_deck']++;
+				} elseif ($ghGone && $allowToDeck && !$deckGone) {
+					$this->deck->deleteCard($userId, $cardId);
+					$this->itemMaps->delete($link);
+					$stats['deleted_to_deck']++;
+				} elseif ($deckGone && $allowToGithub && !$ghGone) {
+					$gItem = $githubItems[$itemId];
+					if (($gItem['content']['__typename'] ?? '') === 'PullRequest') {
+						$this->itemMaps->delete($link);
+						continue;
+					}
+					$this->github->archiveItem($userId, $map->getGithubProjectId(), $itemId, true);
+					$this->itemMaps->delete($link);
+					$stats['deleted_to_github']++;
+				}
+			} catch (\Throwable $e) {
+				$this->logger->debug('deckgithubsync: propagation failed', ['exception' => $e]);
+			}
+		}
+		return $stats;
 	}
 }

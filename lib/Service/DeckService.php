@@ -183,4 +183,40 @@ class DeckService {
 			}
 		}
 	}
+
+	public function archiveCard(string $userId, int $cardId, bool $archive = true): void {
+		[, , $cardService] = $this->services($userId);
+		try {
+			if ($archive && method_exists($cardService, 'archive')) {
+				$cardService->archive($cardId, $userId);
+			} elseif (!$archive && method_exists($cardService, 'unarchive')) {
+				$cardService->unarchive($cardId, $userId);
+			}
+		} catch (\Throwable $e) {
+			$this->logger->debug('deckgithubsync: archive failed', ['exception' => $e]);
+		}
+	}
+
+	public function deleteCard(string $userId, int $cardId): void {
+		[, , $cardService] = $this->services($userId);
+		try {
+			if (method_exists($cardService, 'delete')) {
+				$cardService->delete($cardId, $userId);
+			}
+		} catch (\Throwable $e) {
+			$this->logger->debug('deckgithubsync: delete failed', ['exception' => $e]);
+		}
+	}
+
+	/** Normalize Deck duedate (timestamp|string|null) to Y-m-d or null. */
+	public static function normalizeDue(mixed $duedate): ?string {
+		if ($duedate === null || $duedate === '' || $duedate === 0 || $duedate === '0') {
+			return null;
+		}
+		if (is_numeric($duedate)) {
+			return gmdate('Y-m-d', (int)$duedate);
+		}
+		$ts = strtotime((string)$duedate);
+		return $ts === false ? null : gmdate('Y-m-d', $ts);
+	}
 }

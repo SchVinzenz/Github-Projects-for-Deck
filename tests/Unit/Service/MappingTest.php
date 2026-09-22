@@ -50,4 +50,15 @@ class MappingTest extends TestCase {
 		$this->assertSame('org/repo', GithubProjectService::repoOf($item));
 		$this->assertSame(42, GithubProjectService::numberOf($item));
 	}
+
+	public function testDateExtraction(): void {
+		$item = ['fieldValues' => ['nodes' => [
+			['__typename' => 'ProjectV2ItemFieldDateValue', 'date' => '2026-10-01', 'field' => ['id' => 'F1']],
+			['__typename' => 'ProjectV2ItemFieldSingleSelectValue', 'name' => 'Todo', 'field' => ['name' => 'Status']],
+		]]];
+		$this->assertSame('2026-10-01', GithubProjectService::dateOf($item, 'F1'));
+		$this->assertSame('2026-10-01', GithubProjectService::dateOf($item));
+		$this->assertNull(GithubProjectService::dateOf($item, 'OTHER'));
+		$this->assertNull(GithubProjectService::dateOf(['fieldValues' => ['nodes' => []]]));
+	}
 }

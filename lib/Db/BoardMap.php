@@ -28,6 +28,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setFieldConfig(string $v)
  * @method string getStatusFieldId()
  * @method void setStatusFieldId(string $v)
+ * @method string getDateFieldId()
+ * @method void setDateFieldId(string $v)
  * @method int getLastSync()
  * @method void setLastSync(int $v)
  */
@@ -44,6 +46,7 @@ class BoardMap extends Entity {
 	protected $direction = self::DIR_BOTH;
 	protected $fieldConfig = '{}';
 	protected $statusFieldId = '';
+	protected $dateFieldId = '';
 	protected $lastSync = 0;
 
 	public function __construct() {
@@ -55,6 +58,7 @@ class BoardMap extends Entity {
 		$this->addType('direction', 'string');
 		$this->addType('fieldConfig', 'string');
 		$this->addType('statusFieldId', 'string');
+		$this->addType('dateFieldId', 'string');
 		$this->addType('lastSync', 'integer');
 	}
 

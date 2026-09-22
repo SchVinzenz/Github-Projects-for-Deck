@@ -28,7 +28,7 @@ class GithubProjectService {
 		return $res['data'][$field]['projectV2']['id'] ?? null;
 	}
 
-	/** @return array{fields: array, statusFieldId: string, options: array} */
+	/** @return array{fields: array, statusFieldId: string, dateFieldId: string, options: array} */
 	public function getFields(string $userId, string $projectId): array {
 		$q = 'query($pid:ID!){ node(id:$pid){ ... on ProjectV2{ fields(first:50){ nodes{
 			... on ProjectV2FieldCommon{ __typename id name dataType }
@@ -37,6 +37,7 @@ class GithubProjectService {
 		$res = $this->client->graphql($userId, $q, ['pid' => $projectId]);
 		$nodes = $res['data']['node']['fields']['nodes'] ?? [];
 		$statusFieldId = '';
+		$dateFieldId = '';
 		$options = [];
 		foreach ($nodes as $f) {
 			if (($f['name'] ?? '') === 'Status' && isset($f['options'])) {
@@ -45,8 +46,11 @@ class GithubProjectService {
 					$options[$o['name']] = $o['id'];
 				}
 			}
+			if ($dateFieldId === '' && ($f['dataType'] ?? '') === 'DATE') {
+				$dateFieldId = $f['id'];
+			}
 		}
-		return ['fields' => $nodes, 'statusFieldId' => $statusFieldId, 'options' => $options];
+		return ['fields' => $nodes, 'statusFieldId' => $statusFieldId, 'dateFieldId' => $dateFieldId, 'options' => $options];
 	}
 
 	/** @return array{items: array, hasNext: bool, cursor: ?string} */
@@ -104,6 +108,25 @@ class GithubProjectService {
 	public function deleteItem(string $userId, string $projectId, string $itemId): void {
 		$m = 'mutation($pid:ID!,$item:ID!){ deleteProjectV2Item(input:{projectId:$pid itemId:$item}){ deletedItemId } }';
 		$this->client->graphql($userId, $m, ['pid' => $projectId, 'item' => $itemId]);
+	}
+
+	public function archiveItem(string $userId, string $projectId, string $itemId, bool $archive = true): void {
+		$op = $archive ? 'archiveProjectV2Item' : 'unarchiveProjectV2Item';
+		$m = "mutation(\$pid:ID!,\$item:ID!){ $op(input:{projectId:\$pid itemId:\$item}){ item{ id } } }";
+		$this->client->graphql($userId, $m, ['pid' => $projectId, 'item' => $itemId]);
+	}
+
+	public static function dateOf(array $item, string $dateFieldId = ''): ?string {
+		foreach ($item['fieldValues']['nodes'] ?? [] as $fv) {
+			if (($fv['__typename'] ?? '') !== 'ProjectV2ItemFieldDateValue') {
+				continue;
+			}
+			if ($dateFieldId !== '' && ($fv['field']['id'] ?? '') !== $dateFieldId) {
+				continue;
+			}
+			return $fv['date'] ?? null;
+		}
+		return null;
 	}
 
 	public function updateIssue(string $userId, string $issueNodeId, ?string $title = null, ?string $body = null, ?bool $closed = null): void {

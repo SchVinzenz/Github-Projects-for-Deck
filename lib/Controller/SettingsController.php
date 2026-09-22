@@ -11,6 +11,8 @@ namespace OCA\DeckGithubSync\Controller;
 
 use OCA\DeckGithubSync\Db\BoardMap;
 use OCA\DeckGithubSync\Db\BoardMapMapper;
+use OCA\DeckGithubSync\Db\UserMap;
+use OCA\DeckGithubSync\Db\UserMapMapper;
 use OCA\DeckGithubSync\Service\GithubProjectService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\DataResponse;
@@ -24,6 +26,7 @@ class SettingsController extends Controller {
 		IRequest $request,
 		private IConfig $config,
 		private BoardMapMapper $maps,
+		private UserMapMapper $userMaps,
 		private GithubProjectService $projects,
 		private ?string $userId,
 	) {
@@ -56,13 +59,14 @@ class SettingsController extends Controller {
 		$map->setDirection($direction);
 		$map->setFieldConfig((string)json_encode($fieldConfig));
 		$map->setStatusFieldId($fields['statusFieldId']);
+		$map->setDateFieldId($fields['dateFieldId'] ?? '');
 		$map->setLastSync(0);
 		$this->maps->insert($map);
 		return new DataResponse($this->serialize($map), Http::STATUS_CREATED);
 	}
 
 	/** @NoAdminRequired */
-	public function updateMapping(int $id, ?string $direction = null, ?array $fieldConfig = null): DataResponse {
+	public function updateMapping(int $id, ?string $direction = null, ?array $fieldConfig = null, ?string $dateFieldId = null): DataResponse {
 		try {
 			$map = $this->maps->find($id);
 		} catch (\Exception) {
@@ -76,6 +80,9 @@ class SettingsController extends Controller {
 		}
 		if ($fieldConfig !== null) {
 			$map->setFieldConfig((string)json_encode($fieldConfig));
+		}
+		if ($dateFieldId !== null) {
+			$map->setDateFieldId($dateFieldId);
 		}
 		$this->maps->update($map);
 		return new DataResponse($this->serialize($map));
@@ -119,6 +126,13 @@ class SettingsController extends Controller {
 	}
 
 	private function serialize(BoardMap $m): array {
+		$users = [];
+		try {
+			foreach ($this->userMaps->findByMap($m->getId()) as $um) {
+				$users[] = ['githubLogin' => $um->getGithubLogin(), 'deckUid' => $um->getDeckUid()];
+			}
+		} catch (\Throwable) {
+		}
 		return [
 			'id' => $m->getId(),
 			'deckBoardId' => $m->getDeckBoardId(),
@@ -126,7 +140,39 @@ class SettingsController extends Controller {
 			'githubNumber' => $m->getGithubNumber(),
 			'direction' => $m->getDirection(),
 			'fieldConfig' => $m->getFieldMap(),
+			'dateFieldId' => $m->getDateFieldId(),
+			'userMap' => $users,
 			'lastSync' => $m->getLastSync(),
 		];
+	}
+
+	/** @NoAdminRequired */
+	public function setUserMap(int $id, array $users): DataResponse {
+		try {
+			$map = $this->maps->find($id);
+		} catch (\Exception) {
+			return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+		}
+		if ($map->getUserId() !== $this->userId) {
+			return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+		}
+		try {
+			foreach ($this->userMaps->findByMap($id) as $old) {
+				$this->userMaps->delete($old);
+			}
+			foreach ($users as $u) {
+				if (empty($u['githubLogin']) || empty($u['deckUid'])) {
+					continue;
+				}
+				$um = new UserMap();
+				$um->setMapId($id);
+				$um->setGithubLogin((string)$u['githubLogin']);
+				$um->setDeckUid((string)$u['deckUid']);
+				$this->userMaps->insert($um);
+			}
+		} catch (\Throwable $e) {
+			return new DataResponse(['error' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+		}
+		return new DataResponse($this->serialize($map));
 	}
 }
