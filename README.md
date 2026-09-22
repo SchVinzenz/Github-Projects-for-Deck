@@ -3,7 +3,7 @@
 Bidirektionale, pro Board und pro Feld konfigurierbare Synchronisation zwischen
 Nextcloud Deck und GitHub Projects v2.
 
-## Stand (0.3.0)
+## Stand (0.3.1 – lauffähig)
 
 - User-Mapping `deckghs_usermap` pro Board (`PUT /api/v1/mappings/{id}/users`), Sync nutzt es für Assignees beide Richtungen
 - Due-Date via konfigurierbarer `dateFieldId` (erstes DATE-Feld auto-erkannt, pro Mapping änderbar), `DeckService::normalizeDue`
