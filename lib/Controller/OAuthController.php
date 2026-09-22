@@ -13,6 +13,7 @@ use OCA\DeckGithubSync\AppInfo\Application;
 use OCA\DeckGithubSync\Service\GithubClientService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\RedirectResponse;
 use OCP\IConfig;
 use OCP\IRequest;
@@ -46,6 +47,7 @@ class OAuthController extends Controller {
 	}
 
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function start(): RedirectResponse {
 		$clientId = $this->config->getAppValue(Application::APP_ID, 'oauth_client_id', '');
 		$clientSecret = $this->config->getAppValue(Application::APP_ID, 'oauth_client_secret', '');
@@ -65,6 +67,7 @@ class OAuthController extends Controller {
 	}
 
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function callback(string $code = '', string $state = '', string $error = ''): RedirectResponse {
 		$back = $this->urls->linkToRoute('settings.PersonalSettings.index', ['section' => Application::APP_ID]);
 		$expected = $this->session->get('deckgithubsync_oauth_state');

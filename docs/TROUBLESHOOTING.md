@@ -40,6 +40,8 @@ cd apps-extra/deck && npm ci && npm run build
 
 ## OAuth-Anmeldung schlägt fehl
 
+- `CSRF check failed` bei *Mit GitHub verbinden*: App auf mindestens
+  Version 0.4.5 aktualisieren und die Einstellungsseite neu laden.
 - Im Admin-Formular prüfen, ob **Client Secret: gespeichert** angezeigt wird.
 - Die angezeigte Callback-URL muss bei der GitHub OAuth App exakt eingetragen
   und von außen erreichbar sein. Ein falsches Schema (`http` statt `https`)

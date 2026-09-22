@@ -1,32 +1,41 @@
 <template>
 	<div class="deckghs-wrap">
-		<div v-if="notice" class="deckghs-note deckghs-note-ok">{{ notice }}</div>
-		<div v-if="error" class="deckghs-note deckghs-note-err">{{ error }}</div>
+		<div v-if="notice" class="deckghs-note deckghs-note-ok" role="status">{{ notice }}</div>
+		<div v-if="error" class="deckghs-note deckghs-note-err" role="alert">{{ error }}</div>
 
 		<section class="deckghs-card">
-			<h2>GitHub-Verbindung</h2>
+			<div class="deckghs-connection-header">
+				<div>
+					<h2>GitHub verbinden</h2>
+					<p class="deckghs-muted">Verbinde dein persönliches GitHub-Konto für die Project-Synchronisation.</p>
+				</div>
+				<span v-if="!loading" class="deckghs-status" :class="status.connected ? 'connected' : 'disconnected'">
+					<span class="deckghs-dot" />{{ status.connected ? 'Verbunden' : 'Nicht verbunden' }}
+				</span>
+			</div>
 			<div v-if="loading" class="deckghs-muted">Wird geladen …</div>
 			<div v-else class="deckghs-conn">
-				<span class="deckghs-dot" :class="status.connected ? 'on' : 'off'" />
 				<div class="deckghs-conn-text">
-					<strong v-if="status.connected">Verbunden als {{ status.login }}</strong>
-					<strong v-else>Nicht verbunden</strong>
+					<strong v-if="status.connected">GitHub-Konto: {{ status.login }}</strong>
+					<strong v-else>Dein GitHub-Konto ist noch nicht verbunden.</strong>
 					<p class="deckghs-muted">
-						<span v-if="status.connected">Sync und Board-Zugriff laufen über dieses Konto.</span>
+						<span v-if="status.connected">Projects werden mit diesem Konto abgerufen und synchronisiert.</span>
 						<span v-else>{{ status.reason || 'Verbinde dein GitHub-Konto, damit Boards synchronisiert werden können.' }}</span>
 					</p>
 				</div>
 				<div class="deckghs-actions">
-					<a v-if="!status.connected && status.oauth" class="deckghs-btn primary" :href="apiUrl('/oauth/start')">Mit GitHub verbinden</a>
+					<a v-if="!status.connected && status.oauth" class="deckghs-btn primary" :href="apiUrl('/oauth/start')">Mit GitHub verbinden →</a>
+					<button v-if="status.connected" class="deckghs-btn" :disabled="checkingConnection" @click="refreshConnection">{{ checkingConnection ? 'Prüfe …' : 'Verbindung prüfen' }}</button>
 					<button v-if="status.connected" class="deckghs-btn" @click="disconnect">Trennen</button>
 				</div>
-				</div>
-				<details v-if="!status.connected" class="deckghs-pat">
+			</div>
+			<p v-if="!loading && !status.connected && !status.oauth" class="deckghs-muted">Für die Anmeldung per Klick muss ein Admin einmalig eine GitHub OAuth App einrichten.</p>
+			<details v-if="!status.connected" class="deckghs-pat">
 				<summary>Alternativ: Personal Access Token eintragen</summary>
 				<p class="deckghs-muted">Fine-grained Token mit <code>Projects: Read &amp; Write</code> und <code>Issues: Read &amp; Write</code>.</p>
 				<div class="deckghs-row">
-					<input v-model="pat" type="password" placeholder="github_pat_…" autocomplete="off" />
-					<button class="deckghs-btn primary" :disabled="!pat" @click="savePat">Speichern</button>
+					<label>GitHub-Token <input v-model="pat" type="password" placeholder="github_pat_…" autocomplete="off" /></label>
+					<button class="deckghs-btn primary" :disabled="!pat || savingPat" @click="savePat">{{ savingPat ? 'Prüfe …' : 'Token speichern' }}</button>
 				</div>
 			</details>
 		</section>
@@ -77,7 +86,6 @@
 						<button class="deckghs-btn primary" @click="saveUsers(m)">Nutzer-Mapping speichern</button>
 					</div>
 				</details>
-				<p v-if="!loading && !status.connected && !status.oauth" class="deckghs-muted">Für die Anmeldung per Klick muss ein Admin einmalig eine GitHub OAuth App in den Admin-Einstellungen einrichten.</p>
 			</article>
 		</section>
 
@@ -153,6 +161,8 @@ export default {
 			form: { deckBoardId: 0, githubOwner: '', githubNumber: null, direction: 'both' },
 			results: {},
 			syncing: {},
+			checkingConnection: false,
+			savingPat: false,
 			notice: '',
 			error: '',
 		}
@@ -166,9 +176,8 @@ export default {
 	},
 	async mounted() {
 		const q = new URLSearchParams(window.location.search)
-		if (q.get('gh_connected')) {
-			this.notice = 'GitHub erfolgreich verbunden.'
-		} else if (q.get('gh_error')) {
+		const returnedFromOAuth = q.get('gh_connected') === '1'
+		if (q.get('gh_error')) {
 			this.error = OAUTH_ERRORS[q.get('gh_error')] || 'GitHub-Verbindung fehlgeschlagen.'
 		}
 		try {
@@ -180,6 +189,13 @@ export default {
 			this.mappings = Array.isArray(maps.data) ? maps.data : []
 			this.boards = Array.isArray(boards.data) ? boards.data : []
 			this.status = status.data
+			if (returnedFromOAuth) {
+				if (this.status.connected) {
+					this.notice = `Erfolgreich mit GitHub verbunden als ${this.status.login}.`
+				} else {
+					this.error = this.status.reason || 'GitHub hat die Anmeldung abgeschlossen, aber die Verbindung konnte nicht bestätigt werden.'
+				}
+			}
 			if (this.status.connected) {
 				await this.loadProjects()
 			}
@@ -187,10 +203,35 @@ export default {
 			this.error = 'Daten konnten nicht geladen werden.'
 		} finally {
 			this.loading = false
+			if (returnedFromOAuth || q.has('gh_error')) {
+				q.delete('gh_connected')
+				q.delete('gh_error')
+				window.history.replaceState(window.history.state, '', window.location.pathname + (q.toString() ? '?' + q : '') + window.location.hash)
+			}
 		}
 	},
 	methods: {
 		apiUrl,
+		async refreshConnection() {
+			this.checkingConnection = true
+			this.error = ''
+			this.notice = ''
+			try {
+				const { data } = await axios.get(apiUrl('/api/v1/github/status'))
+				this.status = data
+				if (data.connected) {
+					this.notice = `GitHub-Verbindung bestätigt: ${data.login}.`
+					await this.loadProjects()
+				} else {
+					this.projects = []
+					this.error = data.reason || 'GitHub-Verbindung konnte nicht bestätigt werden.'
+				}
+			} catch (e) {
+				this.error = 'Verbindung konnte nicht geprüft werden. Bitte später erneut versuchen.'
+			} finally {
+				this.checkingConnection = false
+			}
+		},
 		async loadProjects() {
 			this.projectsLoading = true
 			this.projectError = ''
@@ -278,11 +319,13 @@ export default {
 		},
 		async savePat() {
 			this.error = ''
+			this.notice = ''
+			this.savingPat = true
 			try {
 				const { data } = await axios.put(apiUrl('/api/v1/github/token'), { token: this.pat })
 				this.status = { connected: true, login: data.login, oauth: this.status.oauth }
 				this.pat = ''
-				this.notice = 'Token gespeichert.'
+				this.notice = `Erfolgreich mit GitHub verbunden als ${data.login}.`
 				await this.loadProjects()
 			} catch (e) {
 				const status = e.response?.status
@@ -291,14 +334,22 @@ export default {
 						: status === 404 ? 'Der Token-Endpunkt wurde nicht gefunden (404). Bitte die App aktualisieren.'
 							: status ? `Token konnte nicht gespeichert werden (HTTP ${status}).`
 								: 'Nextcloud ist nicht erreichbar. Bitte Verbindung prüfen.')
+			} finally {
+				this.savingPat = false
 			}
 		},
 		async disconnect() {
-			await axios.delete(apiUrl('/api/v1/github/token'))
-			this.status = { connected: false, oauth: this.status.oauth }
-			this.projects = []
-			this.selectedProjectId = ''
-			this.projectError = ''
+			try {
+				await axios.delete(apiUrl('/api/v1/github/token'))
+				this.status = { connected: false, oauth: this.status.oauth }
+				this.projects = []
+				this.selectedProjectId = ''
+				this.projectError = ''
+				this.error = ''
+				this.notice = 'GitHub-Verbindung getrennt.'
+			} catch (e) {
+				this.error = 'GitHub-Verbindung konnte nicht getrennt werden.'
+			}
 		},
 	},
 }
@@ -313,17 +364,21 @@ export default {
 .deckghs-note-ok { background: var(--color-success-background, #e6f4ea); }
 .deckghs-note-warn { background: var(--color-warning-background, #fdf3e0); }
 .deckghs-note-err, .error { background: var(--color-error-background, #fdecea); color: var(--color-error-text, inherit); border-radius: var(--border-radius); padding: 8px 12px; }
-.deckghs-conn { display: flex; gap: 12px; align-items: flex-start; }
-.deckghs-dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
-.deckghs-dot.on { background: var(--color-success, #46ba61); }
-.deckghs-dot.off { background: var(--color-warning, #e6a817); }
+.deckghs-connection-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.deckghs-connection-header p { margin: 0 0 14px; }
+.deckghs-status { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border: 1px solid var(--color-border); border-radius: var(--border-radius-pill, 999px); font-size: 0.85em; white-space: nowrap; }
+.deckghs-status.connected { color: var(--color-success-text, var(--color-main-text)); background: var(--color-success-background, transparent); }
+.deckghs-status.disconnected { color: var(--color-text-maxcontrast); }
+.deckghs-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: var(--color-warning, #e6a817); }
+.deckghs-status.connected .deckghs-dot { background: var(--color-success, #46ba61); }
+.deckghs-conn { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 14px; border: 1px solid var(--color-border); border-radius: var(--border-radius); background: var(--color-background-hover); }
 .deckghs-conn-text { flex: 1; }
 .deckghs-conn-text p { margin: 4px 0 0; }
-.deckghs-actions { display: flex; gap: 8px; }
+.deckghs-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .deckghs-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin: 8px 0; }
 .deckghs-row label { display: flex; flex-direction: column; gap: 4px; font-size: 0.9em; }
 .deckghs-row input, .deckghs-row select, .deckghs-pat input { background: var(--color-main-background); border: 1px solid var(--color-border); border-radius: var(--border-radius); padding: 6px 8px; color: var(--color-main-text); }
-.deckghs-btn { border: 1px solid var(--color-border); border-radius: var(--border-radius-pill, 999px); padding: 6px 14px; background: var(--color-main-background); color: var(--color-main-text); cursor: pointer; }
+.deckghs-btn { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--color-border); border-radius: var(--border-radius-pill, 999px); padding: 6px 14px; background: var(--color-main-background); color: var(--color-main-text); cursor: pointer; text-decoration: none; }
 .deckghs-btn.primary { background: var(--color-primary-element); border-color: var(--color-primary-element); color: var(--color-primary-element-text, #fff); }
 .deckghs-btn.danger { color: var(--color-error); }
 .deckghs-btn:disabled { opacity: 0.5; cursor: default; }
@@ -335,6 +390,6 @@ export default {
 .deckghs-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 0.9em; }
 .deckghs-fields select { background: var(--color-main-background); border: 1px solid var(--color-border); border-radius: var(--border-radius); padding: 6px 8px; color: var(--color-main-text); }
 .deckghs-users { margin-top: 8px; }
-.deckghs-pat { margin-top: 12px; }
-.deckghs-pat summary { cursor: pointer; }
+.deckghs-pat { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--color-border); }
+.deckghs-pat summary { cursor: pointer; color: var(--color-text-maxcontrast); }
 </style>
