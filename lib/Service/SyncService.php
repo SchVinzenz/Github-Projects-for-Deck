@@ -134,7 +134,7 @@ class SyncService {
 					$key = 'deck:' . $card['id'];
 					$existing = $known[$key] ?? null;
 					$hash = $this->hashDeck($card);
-					if ($existing !== null && $existing->getSyncHash() === $hash && isset($githubItems[$existing->getGithubItemId()])) {
+					if ($existing !== null && $existing->getDeckHash() === $hash && $hash !== '' && isset($githubItems[$existing->getGithubItemId()])) {
 						continue;
 					}
 					if ($existing !== null && isset($githubItems[$existing->getGithubItemId()])) {
@@ -143,20 +143,21 @@ class SyncService {
 							continue; // PRs are read-only, never push
 						}
 						if ($allowToDeck && $allowToGithub && $this->newerSide($card, $gItem) === 'github') {
-							$this->pullGithubToDeck($map, $userId, $card, $gItem, $fieldMap, $stackByTitle, $dateFieldId, $userMap);
-							$existing->setSyncHash($this->hashGithub($gItem));
+							$patch = $this->pullGithubToDeck($map, $userId, $card, $gItem, $fieldMap, $stackByTitle, $dateFieldId, $userMap);
+							$existing->setGithubHash($this->hashGithub($gItem));
+							$existing->setDeckHash($this->hashDeck(array_merge($card, $patch)));
 							$this->itemMaps->update($existing);
 							$stats['github_to_deck']++;
 							continue;
 						}
 						$this->pushDeckToGithub($map, $userId, $card, $gItem, $fieldMap, $statusFieldId, $options, $stackById, $dateFieldId, $userMap);
-						$existing->setSyncHash($hash);
+						$existing->setDeckHash($hash);
 						$this->itemMaps->update($existing);
 					} else {
 						// Duplicate protection: adopt untracked GitHub item with same title
 						$matchId = $untrackedGhByTitle[$this->normTitle($card['title'])] ?? null;
 						if ($matchId !== null && isset($githubItems[$matchId])) {
-							$link = $this->linkItems($map->getId(), (int)$card['id'], $matchId, $githubItems[$matchId], $hash);
+							$link = $this->linkItems($map->getId(), (int)$card['id'], $matchId, $githubItems[$matchId], $hash, $this->hashGithub($githubItems[$matchId]));
 							if ($link !== null) {
 								$known['deck:' . $card['id']] = $known['gh:' . $matchId] = $link;
 								unset($untrackedGhByTitle[$this->normTitle($card['title'])]);
@@ -178,7 +179,7 @@ class SyncService {
 								$this->github->setDate($userId, $map->getGithubProjectId(), $itemId, $dateFieldId, $deckDue);
 							}
 						}
-						$im = $this->linkItems($map->getId(), (int)$card['id'], $itemId, ['content' => ['id' => '', '__typename' => 'DraftIssue']], $hash);
+						$im = $this->linkItems($map->getId(), (int)$card['id'], $itemId, ['content' => ['id' => '', '__typename' => 'DraftIssue']], $hash, '');
 						if ($im !== null) {
 							$known['deck:' . $card['id']] = $known['gh:' . $itemId] = $im;
 						}
@@ -200,14 +201,20 @@ class SyncService {
 						if ($card === null) {
 							continue;
 						}
-						if ($this->hashGithub($item) === $link->getSyncHash()) {
+						if ($this->hashGithub($item) === $link->getGithubHash() && $link->getGithubHash() !== '') {
 							continue;
 						}
 						if ($allowToGithub && $this->newerSide($card, $item) === 'deck') {
-							continue; // deck wins, handled in Deck->GitHub pass
+							// deck wins, handled in Deck->GitHub pass; record hash to stop re-checking
+							$link->setGithubHash($this->hashGithub($item));
+							$this->itemMaps->update($link);
+							continue;
 						}
-						$this->pullGithubToDeck($map, $userId, $card, $item, $fieldMap, $stackByTitle, $dateFieldId, $userMap);
-						$link->setSyncHash($this->hashGithub($item));
+						$patch = $this->pullGithubToDeck($map, $userId, $card, $item, $fieldMap, $stackByTitle, $dateFieldId, $userMap);
+						$link->setGithubHash($this->hashGithub($item));
+						if ($patch !== []) {
+							$link->setDeckHash($this->hashDeck(array_merge($card, $patch)));
+						}
 						$this->itemMaps->update($link);
 						$stats['github_to_deck']++;
 						continue;
@@ -218,7 +225,7 @@ class SyncService {
 					$matchCardId = $untrackedDeckByTitle[$this->normTitle($title)] ?? null;
 					$matchCard = $matchCardId !== null ? $this->findDeckCard($matchCardId, $deckCards) : null;
 					if ($matchCard !== null) {
-						$link = $this->linkItems($map->getId(), $matchCardId, $itemId, $item, $this->hashGithub($item));
+						$link = $this->linkItems($map->getId(), $matchCardId, $itemId, $item, $this->hashDeck($matchCard), $this->hashGithub($item));
 						if ($link !== null) {
 							$known['deck:' . $matchCardId] = $known['gh:' . $itemId] = $link;
 							unset($untrackedDeckByTitle[$this->normTitle($title)]);
@@ -243,7 +250,10 @@ class SyncService {
 							$this->deck->syncLabels($userId, $map->getDeckBoardId(), $cardId, $ghLabels);
 						}
 					}
-					$link = $this->linkItems($map->getId(), $cardId, $itemId, $item, $this->hashGithub($item));
+					$link = $this->linkItems($map->getId(), $cardId, $itemId, $item, $this->hashDeck([
+						'title' => $title, 'description' => $body, 'stackId' => $targetStack,
+						'duedate' => $due, 'labels' => $ghLabels ?? [], 'assignedUsers' => [],
+					]), $this->hashGithub($item));
 					if ($link !== null) {
 						$known['deck:' . $cardId] = $known['gh:' . $itemId] = $link;
 					}
@@ -268,7 +278,7 @@ class SyncService {
 	 * Create an item link unless one already exists (race-safe).
 	 * @return ItemMap|null the link, or null when a conflicting link exists
 	 */
-	private function linkItems(int $mapId, int $deckCardId, string $githubItemId, array $gItem, string $hash): ?ItemMap {
+	private function linkItems(int $mapId, int $deckCardId, string $githubItemId, array $gItem, string $deckHash, string $githubHash): ?ItemMap {
 		try {
 			if ($this->itemMaps->findByDeckCard($mapId, $deckCardId) !== null
 				|| $this->itemMaps->findByGithubItem($mapId, $githubItemId) !== null) {
@@ -282,7 +292,9 @@ class SyncService {
 			$im->setGithubItemId($githubItemId);
 			$im->setGithubContentId($content['id'] ?? '');
 			$im->setContentType($content['__typename'] ?? 'DraftIssue');
-			$im->setSyncHash($hash);
+			$im->setSyncHash($deckHash !== '' ? $deckHash : $githubHash);
+			$im->setDeckHash($deckHash);
+			$im->setGithubHash($githubHash);
 			$this->itemMaps->insert($im);
 			return $im;
 		} catch (\Throwable $e) {
@@ -405,7 +417,7 @@ class SyncService {
 		return null;
 	}
 
-	private function pullGithubToDeck(BoardMap $map, string $userId, array $card, array $gItem, array $fieldMap, array $stackByTitle, string $dateFieldId = '', array $userMap = []): void {
+	private function pullGithubToDeck(BoardMap $map, string $userId, array $card, array $gItem, array $fieldMap, array $stackByTitle, string $dateFieldId = '', array $userMap = []): array {
 		$content = $gItem['content'] ?? [];
 		$patch = [];
 		if ($this->fieldAllowed($fieldMap, 'title', BoardMap::DIR_TO_DECK) && isset($content['title']) && $content['title'] !== $card['title']) {
@@ -452,6 +464,7 @@ class SyncService {
 			&& ($content['__typename'] ?? '') === 'Issue') {
 			$this->pullMissingComments($userId, (int)$card['id'], $gItem);
 		}
+		return $patch;
 	}
 
 	private function pullMissingComments(string $userId, int $cardId, array $gItem): void {

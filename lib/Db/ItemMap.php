@@ -24,6 +24,10 @@ use OCP\AppFramework\Db\Entity;
  * @method void setContentType(string $v)
  * @method string getSyncHash()
  * @method void setSyncHash(string $v)
+ * @method string getDeckHash()
+ * @method void setDeckHash(string $v)
+ * @method string getGithubHash()
+ * @method void setGithubHash(string $v)
  */
 class ItemMap extends Entity {
 	protected $mapId = 0;
@@ -32,6 +36,8 @@ class ItemMap extends Entity {
 	protected $githubContentId = '';
 	protected $contentType = 'DraftIssue';
 	protected $syncHash = '';
+	protected $deckHash = '';
+	protected $githubHash = '';
 
 	public function __construct() {
 		$this->addType('mapId', 'integer');
@@ -40,5 +46,7 @@ class ItemMap extends Entity {
 		$this->addType('githubContentId', 'string');
 		$this->addType('contentType', 'string');
 		$this->addType('syncHash', 'string');
+		$this->addType('deckHash', 'string');
+		$this->addType('githubHash', 'string');
 	}
 }
