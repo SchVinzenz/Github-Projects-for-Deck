@@ -29,7 +29,7 @@ Requires the Nextcloud Deck app. Deck attachments remain in Nextcloud and are no
 * Zeitgesteuert, manuell oder per GitHub-Webhook synchronisieren.
 
 Die Nextcloud-App Deck wird benötigt. Anhänge bleiben in Nextcloud und werden nicht nach GitHub hochgeladen.]]></description>
-	<version>0.5.0</version>
+	<version>1.0.0</version>
 	<licence>AGPL-3.0-or-later</licence>
 	<author homepage="https://github.com/SchVinzenz">SchVinzenz</author>
 	<namespace>DeckGithubSync</namespace>
