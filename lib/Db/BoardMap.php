@@ -101,6 +101,7 @@ class BoardMap extends Entity {
 			'title' => self::DIR_BOTH,
 			'description' => self::DIR_BOTH,
 			'status' => self::DIR_BOTH,
+			'done' => self::DIR_BOTH,
 			'labels' => self::DIR_BOTH,
 			'assignees' => self::DIR_BOTH,
 			'due' => self::DIR_BOTH,

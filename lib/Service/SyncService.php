@@ -463,7 +463,8 @@ class SyncService {
 					$due = $this->fieldAllowed($fieldMap, 'due', BoardMap::DIR_TO_DECK) && $dateFieldId !== '' ? GithubProjectService::dateOf($item, $dateFieldId) : null;
 					$start = $this->fieldAllowed($fieldMap, 'start', BoardMap::DIR_TO_DECK) && $startFieldId !== '' ? GithubProjectService::dateOf($item, $startFieldId) : null;
 					$cardId = $this->deck->createCard($userId, (int)$targetStack, $title, $body, $due, $start);
-					if (($content['__typename'] ?? '') === 'Issue' && !empty($content['closed'])) {
+					if ($this->fieldAllowed($fieldMap, 'done', BoardMap::DIR_TO_DECK)
+						&& ($content['__typename'] ?? '') === 'Issue' && !empty($content['closed'])) {
 						$this->deck->setDone($userId, $cardId, true);
 					}
 					if ($this->fieldAllowed($fieldMap, 'labels', BoardMap::DIR_TO_DECK)) {
@@ -485,7 +486,9 @@ class SyncService {
 					}
 					$link = $this->linkItems($map->getId(), $cardId, $itemId, $item, $this->hashDeck([
 						'title' => $title, 'description' => $body, 'stackId' => $targetStack,
-						'duedate' => $due, 'startdate' => $start, 'done' => !empty($content['closed']), 'labels' => $ghLabels ?? [], 'assignedUsers' => [],
+						'duedate' => $due, 'startdate' => $start,
+						'done' => $this->fieldAllowed($fieldMap, 'done', BoardMap::DIR_TO_DECK) && !empty($content['closed']),
+						'labels' => $ghLabels ?? [], 'assignedUsers' => [],
 					]), $this->hashGithub($item));
 					if ($link !== null) {
 						$known['deck:' . $cardId] = $known['gh:' . $itemId] = $link;
@@ -618,7 +621,8 @@ class SyncService {
 			if ($this->fieldAllowed($fieldMap, 'description', BoardMap::DIR_TO_GITHUB) && ($content['body'] ?? '') !== ($card['description'] ?? '')) {
 				$patch['body'] = $card['description'] ?? '';
 			}
-			if ((bool)($content['closed'] ?? false) !== (bool)($card['done'] ?? false)) {
+			if ($this->fieldAllowed($fieldMap, 'done', BoardMap::DIR_TO_GITHUB)
+				&& (bool)($content['closed'] ?? false) !== (bool)($card['done'] ?? false)) {
 				$patch['state'] = !empty($card['done']) ? 'closed' : 'open';
 			}
 			$repo = GithubProjectService::repoOf($gItem);
@@ -762,7 +766,9 @@ class SyncService {
 		if ($patch !== []) {
 			$this->deck->updateCard($userId, (int)$card['id'], $patch);
 		}
-		if (($content['__typename'] ?? '') === 'Issue' && (bool)($card['done'] ?? false) !== (bool)($content['closed'] ?? false)) {
+		if ($this->fieldAllowed($fieldMap, 'done', BoardMap::DIR_TO_DECK)
+			&& ($content['__typename'] ?? '') === 'Issue'
+			&& (bool)($card['done'] ?? false) !== (bool)($content['closed'] ?? false)) {
 			$this->deck->setDone($userId, (int)$card['id'], (bool)$content['closed']);
 			$patch['done'] = (bool)$content['closed'];
 		}

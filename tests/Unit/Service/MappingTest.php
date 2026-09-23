@@ -19,14 +19,16 @@ class MappingTest extends TestCase {
 		$map->setFieldConfig('{}');
 		$this->assertSame('both', $map->getFieldMap()['title']);
 		$this->assertSame('both', $map->getFieldMap()['status']);
+		$this->assertSame('both', $map->getFieldMap()['done']);
 	}
 
 	public function testFieldMapOverride(): void {
 		$map = new BoardMap();
-		$map->setFieldConfig('{"title":"deck_to_github","status":"off"}');
+		$map->setFieldConfig('{"title":"deck_to_github","status":"off","done":"github_to_deck"}');
 		$fm = $map->getFieldMap();
 		$this->assertSame('deck_to_github', $fm['title']);
 		$this->assertSame('off', $fm['status']);
+		$this->assertSame('github_to_deck', $fm['done']);
 		$this->assertSame('both', $fm['description']);
 	}
 
