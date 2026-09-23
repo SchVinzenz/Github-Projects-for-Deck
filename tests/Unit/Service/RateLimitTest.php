@@ -59,4 +59,22 @@ class RateLimitTest extends TestCase {
 		$this->assertSame($retryAt, $map->getCooldownUntil());
 		$this->assertSame($retryAt, $result['retryAt']);
 	}
+
+	public function testSyncSkipsGithubWhileMappingIsInCooldown(): void {
+		$map = new BoardMap();
+		$map->setCooldownUntil(time() + 300);
+		$github = $this->createMock(GithubProjectService::class);
+		$github->expects($this->never())->method('getFields');
+		$maps = $this->createMock(BoardMapMapper::class);
+		$maps->expects($this->never())->method('update');
+		$sync = new SyncService($maps, $this->createMock(ItemMapMapper::class), $this->createMock(UserMapMapper::class),
+			$this->createMock(DeckService::class), $github, $this->createMock(IUserManager::class),
+			$this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class));
+
+		$result = $sync->syncBoard($map);
+
+		$this->assertSame(0, $result['deck_to_github']);
+		$this->assertSame(0, $result['github_to_deck']);
+		$this->assertGreaterThan(time(), $result['retryAt']);
+	}
 }

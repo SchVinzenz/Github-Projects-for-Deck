@@ -217,4 +217,101 @@ class SyncReliabilityTest extends TestCase {
 		$this->assertCount(1, $result['errors']);
 		$this->assertSame(0, $result['deck_to_github']);
 	}
+
+	public function testExistingStatusOptionsRemainUsableAndCorrectedDueFieldIsSaved(): void {
+		$map = new BoardMap();
+		$map->setId(1);
+		$map->setUserId('alice');
+		$map->setDeckBoardId(10);
+		$map->setGithubProjectId('P1');
+		$map->setDirection(BoardMap::DIR_TO_GITHUB);
+		$map->setStatusFieldId('F1');
+		$map->setDateFieldId('START');
+		$map->setStartFieldId('START');
+		$maps = $this->createMock(BoardMapMapper::class);
+		$maps->expects($this->once())->method('update')->with($map);
+		$items = $this->createMock(ItemMapMapper::class);
+		$items->method('findByMap')->willReturn([]);
+		$items->method('findByDeckCard')->willReturn(null);
+		$items->method('findByGithubItem')->willReturn(null);
+		$deck = $this->createMock(DeckService::class);
+		$deck->method('getCards')->willReturn([[
+			'id' => 20, 'title' => 'A card', 'description' => '', 'stackId' => 30,
+			'duedate' => null, 'startdate' => null, 'labels' => [], 'assignedUsers' => [],
+		]]);
+		$deck->method('getStacks')->willReturn([['id' => 30, 'title' => 'To do']]);
+		$github = $this->createMock(GithubProjectService::class);
+		$github->method('getFields')->willReturn([
+			'fields' => [['id' => 'F1'], ['id' => 'START'], ['id' => 'DUE']],
+			'statusFieldId' => 'F1', 'startDateFieldId' => 'START', 'dateFieldId' => 'DUE',
+			'options' => ['To do' => 'O1'],
+		]);
+		$github->method('ensureDateFields')->willReturn(['startDateFieldId' => 'START', 'dateFieldId' => 'DUE']);
+		$github->method('ensureStatusOptions')->willThrowException(new \RuntimeException('cannot add options'));
+		$github->method('listItems')->willReturn(['items' => [], 'hasNext' => false, 'cursor' => null]);
+		$github->method('addDraft')->willReturn('I1');
+		$github->expects($this->once())->method('setStatus')->with('alice', 'P1', 'I1', 'F1', 'O1');
+		$sync = new SyncService($maps, $items, $this->createMock(UserMapMapper::class), $deck, $github,
+			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class));
+		$result = $sync->syncBoard($map);
+		$this->assertSame([], $result['errors']);
+		$this->assertSame('DUE', $map->getDateFieldId());
+	}
+
+	public function testChangedGithubFieldIdForcesFullProjectScan(): void {
+		$map = new BoardMap();
+		$map->setId(1);
+		$map->setUserId('alice');
+		$map->setDeckBoardId(10);
+		$map->setGithubProjectId('P1');
+		$map->setDirection(BoardMap::DIR_TO_GITHUB);
+		$map->setFieldConfig('{"title":"off","description":"off","status":"off","done":"off","labels":"off","assignees":"off","due":"off","start":"off","comments":"off"}');
+		$map->setStatusFieldId('F_OLD');
+		$map->setDateFieldId('DUE');
+		$map->setStartFieldId('START');
+		$map->setLastSync((int)strtotime(gmdate('Y-m-d') . ' 00:00:00 UTC'));
+
+		$link = new ItemMap();
+		$link->setMapId(1);
+		$link->setDeckCardId(20);
+		$link->setGithubItemId('I1');
+		$link->setContentType('DraftIssue');
+		$link->setDeckHash('old-deck-hash');
+		$link->setGithubHash('old-github-hash');
+
+		$maps = $this->createMock(BoardMapMapper::class);
+		$maps->expects($this->once())->method('update')->with($map);
+		$items = $this->createMock(ItemMapMapper::class);
+		$items->method('findByMap')->willReturn([$link]);
+		$items->expects($this->once())->method('update')->with($link);
+		$users = $this->createMock(UserMapMapper::class);
+		$users->method('findByMap')->willReturn([]);
+		$deck = $this->createMock(DeckService::class);
+		$deck->method('getCards')->willReturn([[
+			'id' => 20, 'title' => 'A card', 'description' => 'Body', 'stackId' => 30,
+			'duedate' => null, 'startdate' => null, 'labels' => [], 'assignedUsers' => [],
+		]]);
+		$deck->method('getStacks')->willReturn([['id' => 30, 'title' => 'To do']]);
+		$github = $this->createMock(GithubProjectService::class);
+		$github->method('getFields')->willReturn([
+			'fields' => [['id' => 'F_NEW'], ['id' => 'DUE'], ['id' => 'START']],
+			'statusFieldId' => 'F_NEW', 'dateFieldId' => 'DUE', 'startDateFieldId' => 'START',
+			'options' => ['To do' => 'O1'],
+		]);
+		$github->method('ensureDateFields')->willReturn(['dateFieldId' => 'DUE', 'startDateFieldId' => 'START']);
+		$github->method('ensureStatusOptions')->willReturn(['to do' => 'O1']);
+		$github->expects($this->once())->method('listItems')->with('alice', 'P1', null, null)->willReturn([
+			'items' => [['id' => 'I1', 'content' => ['__typename' => 'DraftIssue', 'title' => 'A card', 'body' => 'Body']]],
+			'hasNext' => false,
+			'cursor' => null,
+		]);
+
+		$sync = new SyncService($maps, $items, $users, $deck, $github,
+			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class));
+		$result = $sync->syncBoard($map);
+
+		$this->assertSame([], $result['errors']);
+		$this->assertSame(1, $result['deck_to_github']);
+		$this->assertSame('F_NEW', $map->getStatusFieldId());
+	}
 }

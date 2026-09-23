@@ -67,6 +67,16 @@ class SyncService {
 	public function syncBoard(BoardMap $map): array {
 		$prevUid = $this->userSession->getUser()?->getUID();
 		try {
+			if ($map->getCooldownUntil() > time()) {
+				$retryAt = $map->getCooldownUntil();
+				return [
+					'deck_to_github' => 0,
+					'github_to_deck' => 0,
+					'errors' => [$this->l->t('GitHub rate limit cooldown is active.')],
+					'warnings' => [],
+					'retryAt' => $retryAt,
+				];
+			}
 			return $this->doSyncBoard($map);
 		} catch (GithubRateLimitException $e) {
 			// Cooldown instead of lastSync: lastSync keeps the last SUCCESSFUL
@@ -157,6 +167,10 @@ class SyncService {
 			$startFieldId = $this->refreshFieldId($map, 'start', $map->getStartFieldId(), (string)($fields['startDateFieldId'] ?? ''), $knownIds);
 			if ($dateFieldId !== '' && $dateFieldId === ($fields['startDateFieldId'] ?? '') && ($fields['dateFieldId'] ?? '') !== '') {
 				$dateFieldId = $fields['dateFieldId'];
+				$map->setDateFieldId($dateFieldId);
+				if ($this->hasEstablishedLinks) {
+					$this->schemaChanged = true;
+				}
 			}
 			if ($allowToGithub) {
 				try {
@@ -178,7 +192,11 @@ class SyncService {
 					$this->logger->warning('deckgithubsync: ensureDateFields failed', ['exception' => $e]);
 				}
 			}
-			$options = $fields['options']; // name => id
+			// getFields uses display names; all status lookups below use lowercase keys.
+			$options = [];
+			foreach ($fields['options'] ?? [] as $name => $id) {
+				$options[mb_strtolower((string)$name)] = $id;
+			}
 			if ($statusFieldId !== '') {
 				if ($allowToGithub) {
 					try {
@@ -226,6 +244,12 @@ class SyncService {
 				$stackById[$id] = 'Todo';
 			}
 
+			// Field IDs may have changed after the incremental decision. Revisit
+			// every linked item so values under the new field IDs are synchronized.
+			if ($this->schemaChanged) {
+				$incremental = false;
+				$filter = null;
+			}
 			$after = null;
 			do {
 				$page = $this->github->listItems($userId, $map->getGithubProjectId(), $after, $filter);

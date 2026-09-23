@@ -330,6 +330,7 @@ class SettingsController extends Controller {
 		if ($map->getUserId() !== $this->userId) {
 			return new DataResponse(['error' => $this->l->t('Not found')], Http::STATUS_NOT_FOUND);
 		}
+		$this->db->beginTransaction();
 		try {
 			foreach ($this->userMaps->findByMap($id) as $old) {
 				$this->userMaps->delete($old);
@@ -344,8 +345,10 @@ class SettingsController extends Controller {
 				$um->setDeckUid((string)$u['deckUid']);
 				$this->userMaps->insert($um);
 			}
-		} catch (\Throwable $e) {
-			return new DataResponse(['error' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+			$this->db->commit();
+		} catch (\Throwable) {
+			$this->db->rollBack();
+			return new DataResponse(['error' => $this->l->t('User mappings could not be saved.')], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 		return new DataResponse($this->serialize($map));
 	}

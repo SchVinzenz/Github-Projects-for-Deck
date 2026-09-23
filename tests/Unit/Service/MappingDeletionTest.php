@@ -68,4 +68,31 @@ class MappingDeletionTest extends TestCase {
 			$this->createMock(DeckService::class), $this->createMock(IURLGenerator::class), $this->createMock(IL10N::class), 'alice');
 		$this->assertSame(200, $controller->deleteMapping(5)->getStatus());
 	}
+
+	public function testUserMappingReplacementRollsBackOnInsertFailure(): void {
+		$map = new BoardMap();
+		$map->setId(5);
+		$map->setUserId('alice');
+		$oldUserMap = new UserMap();
+		$db = $this->createMock(IDBConnection::class);
+		$db->expects($this->once())->method('beginTransaction');
+		$db->expects($this->never())->method('commit');
+		$db->expects($this->once())->method('rollBack');
+		$maps = $this->createMock(BoardMapMapper::class);
+		$maps->method('findById')->willReturn($map);
+		$items = $this->createMock(ItemMapMapper::class);
+		$users = $this->createMock(UserMapMapper::class);
+		$users->method('findByMap')->willReturn([$oldUserMap]);
+		$users->expects($this->once())->method('delete')->with($oldUserMap);
+		$users->expects($this->once())->method('insert')->willThrowException(new \RuntimeException('Database failure'));
+		$controller = new SettingsController('deckgithubsync', $this->createMock(IRequest::class),
+			$this->createMock(IConfig::class), $db, $maps, $items, $users,
+			$this->createMock(GithubProjectService::class), $this->createMock(GithubClientService::class),
+			$this->createMock(DeckService::class), $this->createMock(IURLGenerator::class),
+			$this->createMock(IL10N::class), 'alice');
+
+		$response = $controller->setUserMap(5, [['githubLogin' => 'alice-gh', 'deckUid' => 'alice']]);
+
+		$this->assertSame(500, $response->getStatus());
+	}
 }
