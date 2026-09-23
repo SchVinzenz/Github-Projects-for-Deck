@@ -27,7 +27,7 @@ Basis: `/index.php/apps/deckgithubsync`, Auth: Nextcloud-Session (+ CSRF).
 
 | Methode | Pfad | Beschreibung |
 |---|---|---|
-| POST | `/api/v1/sync/{id}` | Mapping sofort syncen, gibt Statistik zurück |
+| POST | `/api/v1/sync/{id}` | Mapping sofort syncen, gibt Statistik (`deck_to_github`, `github_to_deck`, `errors`, `warnings`) zurück |
 | GET | `/api/v1/sync/{id}/status` | `lastSync`, Richtung |
 
 ## Admin

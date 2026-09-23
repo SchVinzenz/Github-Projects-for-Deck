@@ -347,11 +347,15 @@ export default {
 			try {
 				const { data } = await axios.post(apiUrl(`/api/v1/sync/${m.id}`))
 				const errs = (data.errors || []).length
-				this.results[m.id] = `Deck→GitHub: ${data.deck_to_github}, GitHub→Deck: ${data.github_to_deck}` + (errs ? `, Fehler: ${errs}` : '')
+				const warns = (data.warnings || []).length
+				this.results[m.id] = `Deck→GitHub: ${data.deck_to_github}, GitHub→Deck: ${data.github_to_deck}` + (errs ? `, Fehler: ${errs}` : '') + (warns ? `, Hinweise: ${warns}` : '')
 				if (errs) {
 					this.error = data.errors.join('; ')
 				} else {
 					m.lastSync = Math.floor(Date.now() / 1000)
+				}
+				if (warns && !errs) {
+					this.notice = data.warnings.join('; ')
 				}
 			} catch (e) {
 				this.error = 'Sync fehlgeschlagen.'

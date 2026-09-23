@@ -10,7 +10,7 @@
 				<label>App ID <input v-model="form.githubAppId" inputmode="numeric" /></label>
 				<label>Installation ID <input v-model="form.githubInstallationId" inputmode="numeric" /></label>
 			</div>
-			<label class="deckghs-block">Private Key (.pem)
+			<label class="deckghs-block">Private Key (.pem){{ hasPrivateKey ? ' (gespeichert)' : '' }}
 				<textarea v-model="form.githubPrivateKey" rows="3" placeholder="Nur beim Ändern einfügen – gespeicherter Key bleibt sonst erhalten." autocomplete="off" />
 			</label>
 			<div class="deckghs-grid">
@@ -58,6 +58,7 @@ export default {
 			},
 			saving: false,
 			hasOauthSecret: false,
+			hasPrivateKey: false,
 			copied: false,
 			notice: '',
 			error: '',
@@ -72,6 +73,7 @@ export default {
 			this.form.oauthClientId = data.oauth_client_id
 			this.form.oauthCallbackUrl = data.oauth_callback_url
 			this.hasOauthSecret = data.has_oauth_secret
+			this.hasPrivateKey = data.has_private_key
 		} catch (e) {
 			this.error = 'Konfiguration konnte nicht geladen werden.'
 		}
@@ -113,6 +115,7 @@ export default {
 				this.form.githubPrivateKey = ''
 				this.form.oauthClientSecret = ''
 				this.hasOauthSecret = data.has_oauth_secret
+				this.hasPrivateKey = data.has_private_key
 				this.notice = 'Gespeichert.'
 			} catch (e) {
 				this.error = 'Speichern fehlgeschlagen.'
