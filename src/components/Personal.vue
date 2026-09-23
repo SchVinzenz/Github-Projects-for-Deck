@@ -432,9 +432,9 @@ export default {
 .deckghs-step { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--color-primary-element); color: var(--color-primary-element-text, #fff); font-size: 0.75em; font-weight: bold; flex-shrink: 0; }
 .deckghs-muted { color: var(--color-text-maxcontrast); font-size: 0.9em; }
 .deckghs-note { border-radius: var(--border-radius); padding: 8px 12px; }
-.deckghs-note-ok { background: var(--color-success-background, #e6f4ea); }
-.deckghs-note-warn { background: var(--color-warning-background, #fdf3e0); }
-.deckghs-note-err, .error { background: var(--color-error-background, #fdecea); color: var(--color-error-text, inherit); border-radius: var(--border-radius); padding: 8px 12px; }
+.deckghs-note-ok { background: color-mix(in srgb, var(--color-success, #46ba61) 18%, var(--color-main-background)); color: var(--color-main-text); }
+.deckghs-note-warn { background: color-mix(in srgb, var(--color-warning, #e6a817) 18%, var(--color-main-background)); color: var(--color-main-text); }
+.deckghs-note-err, .error { background: color-mix(in srgb, var(--color-error, #d2322d) 18%, var(--color-main-background)); color: var(--color-main-text); border-radius: var(--border-radius); padding: 8px 12px; }
 .deckghs-connection-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .deckghs-connection-header p { margin: 0 0 14px; }
 .deckghs-status { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border: 1px solid var(--color-border); border-radius: var(--border-radius-pill, 999px); font-size: 0.85em; white-space: nowrap; }

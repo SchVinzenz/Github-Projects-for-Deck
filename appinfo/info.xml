@@ -1,39 +1,63 @@
-<?xml version="1.0"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <!--
-  - SPDX-FileCopyrightText: 2026 Nextcloud contributors
+  - SPDX-FileCopyrightText: 2026 SchVinzenz
   - SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	  xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+      xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
 	<id>deckgithubsync</id>
 	<name>Deck ↔ GitHub Projects Sync</name>
-	<summary>Synchronize Nextcloud Deck boards with GitHub Projects v2</summary>
-	<description><![CDATA[Bidirectional, per-board and per-field configurable sync between Nextcloud Deck and GitHub Projects (v2).
+	<summary>Keep Nextcloud Deck boards and GitHub Projects in sync</summary>
+	<summary lang="de">Nextcloud Deck-Boards mit GitHub Projects synchronisieren</summary>
+	<description><![CDATA[Connect a Nextcloud Deck board to a GitHub Project and keep cards and project items aligned.
 
-* Deck board ↔ GitHub Project v2 (org/user)
-* Stack ↔ Status field option, Card ↔ DraftIssue/Issue
-* Title, description, labels, assignees, start/due dates, done state, comments
-* GitHub App (installation token), OAuth login or personal token
-* Webhook (projects_v2_item) + background job fallback]]></description>
+* Sync cards and project items in both directions, or choose one direction per field.
+* Map Deck stacks to the GitHub Project Status field.
+* Sync titles, descriptions, labels, assignees, dates, completion state and comments.
+* Use GitHub Issues when a repository is selected, or Project draft items without one.
+* Connect with GitHub OAuth or a personal access token; optional GitHub App credentials support server-side sync.
+* Run scheduled syncs, trigger a manual sync, or use a GitHub webhook for faster updates.
+
+Requires the Nextcloud Deck app. Deck attachments remain in Nextcloud and are not uploaded to GitHub.]]></description>
+	<description lang="de"><![CDATA[Verbinde ein Nextcloud Deck-Board mit einem GitHub Project und gleiche Karten und Project-Items ab.
+
+* Synchronisation in beide Richtungen oder Feldrichtung einzeln festlegen.
+* Deck-Listen mit dem GitHub-Project-Feld Status abgleichen.
+* Titel, Beschreibung, Labels, Zuweisungen, Termine, Erledigt-Status und Kommentare synchronisieren.
+* Mit Repository GitHub Issues verwenden, ohne Repository Project-Drafts.
+* GitHub per OAuth oder Personal Access Token verbinden; eine GitHub App kann den Server-Sync übernehmen.
+* Zeitgesteuert, manuell oder per GitHub-Webhook synchronisieren.
+
+Die Nextcloud-App Deck wird benötigt. Anhänge bleiben in Nextcloud und werden nicht nach GitHub hochgeladen.]]></description>
 	<version>0.5.0</version>
-	<licence>agpl</licence>
-	<author>Nextcloud contributors</author>
+	<licence>AGPL-3.0-or-later</licence>
+	<author homepage="https://github.com/SchVinzenz">SchVinzenz</author>
 	<namespace>DeckGithubSync</namespace>
+	<documentation>
+		<user>https://github.com/SchVinzenz/Github-Projects-for-Deck/blob/main/docs/USAGE.md</user>
+		<admin>https://github.com/SchVinzenz/Github-Projects-for-Deck/blob/main/docs/SETUP.md</admin>
+		<developer>https://github.com/SchVinzenz/Github-Projects-for-Deck/blob/main/docs/ARCHITECTURE.md</developer>
+	</documentation>
 	<category>integration</category>
+	<website>https://github.com/SchVinzenz/Github-Projects-for-Deck</website>
 	<bugs>https://github.com/SchVinzenz/Github-Projects-for-Deck/issues</bugs>
+	<repository>https://github.com/SchVinzenz/Github-Projects-for-Deck</repository>
+	<screenshot>https://raw.githubusercontent.com/SchVinzenz/Github-Projects-for-Deck/main/docs/screenshots/deck-demo-board.jpg</screenshot>
+	<screenshot>https://raw.githubusercontent.com/SchVinzenz/Github-Projects-for-Deck/main/docs/screenshots/deck-card-details.jpg</screenshot>
+	<screenshot>https://raw.githubusercontent.com/SchVinzenz/Github-Projects-for-Deck/main/docs/screenshots/sync-settings.jpg</screenshot>
 	<dependencies>
 		<nextcloud min-version="30" max-version="36"/>
 	</dependencies>
 	<background-jobs>
 		<job>OCA\DeckGithubSync\BackgroundJob\SyncJob</job>
 	</background-jobs>
+	<commands>
+		<command>OCA\DeckGithubSync\Command\SyncCommand</command>
+	</commands>
 	<settings>
 		<admin>OCA\DeckGithubSync\Settings\AdminSettings</admin>
 		<admin-section>OCA\DeckGithubSync\Settings\AdminSection</admin-section>
 		<personal>OCA\DeckGithubSync\Settings\PersonalSettings</personal>
 		<personal-section>OCA\DeckGithubSync\Settings\PersonalSection</personal-section>
 	</settings>
-	<commands>
-		<command>OCA\DeckGithubSync\Command\SyncCommand</command>
-	</commands>
 </info>

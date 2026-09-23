@@ -137,8 +137,8 @@ export default {
 .deckghs-copyrow { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .deckghs-muted { color: var(--color-text-maxcontrast); font-size: 0.9em; }
 .deckghs-note { border-radius: var(--border-radius); padding: 8px 12px; }
-.deckghs-note-ok { background: var(--color-success-background, #e6f4ea); }
-.deckghs-note-err { background: var(--color-error-background, #fdecea); border-radius: var(--border-radius); padding: 8px 12px; }
+.deckghs-note-ok { background: color-mix(in srgb, var(--color-success, #46ba61) 18%, var(--color-main-background)); color: var(--color-main-text); }
+.deckghs-note-err { background: color-mix(in srgb, var(--color-error, #d2322d) 18%, var(--color-main-background)); color: var(--color-main-text); border-radius: var(--border-radius); padding: 8px 12px; }
 .deckghs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px 12px; margin: 8px 0; }
 .deckghs-grid label, .deckghs-block { display: flex; flex-direction: column; gap: 4px; font-size: 0.9em; }
 .deckghs-block { margin: 8px 0; }

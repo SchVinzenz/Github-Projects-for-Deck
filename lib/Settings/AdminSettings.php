@@ -31,8 +31,8 @@ class AdminSettings implements IDelegatedSettings {
 			'has_webhook_secret' => $this->config->getAppValue(Application::APP_ID, 'webhook_secret', '') !== '',
 			'sync_interval' => (int)$this->config->getAppValue(Application::APP_ID, 'sync_interval', '900'),
 		]);
-		Util::addScript(Application::APP_ID, Application::APP_ID . '-admin');
-		Util::addStyle(Application::APP_ID, Application::APP_ID . '-admin');
+		Util::addScript(Application::APP_ID, Application::APP_ID . '-admin-v2');
+		Util::addStyle(Application::APP_ID, Application::APP_ID . '-admin-v2');
 		return new TemplateResponse(Application::APP_ID, 'admin');
 	}
 

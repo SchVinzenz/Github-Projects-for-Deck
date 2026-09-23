@@ -1,71 +1,56 @@
-# Deck ↔ GitHub Projects Sync (`deckgithubsync`)
+# Deck ↔ GitHub Projects Sync
 
-Bidirektionale, pro Board und pro Feld konfigurierbare Synchronisation zwischen
-Nextcloud Deck und GitHub Projects v2.
+Sync Nextcloud Deck boards with GitHub Projects v2. Choose a sync direction for each mapping and for individual fields, then let a background job keep both sides up to date.
 
-## Funktionen (0.5.0)
+Test a new mapping with disposable boards before using it for important work.
 
-- **Verbinden per Klick**: GitHub OAuth-Login mit Token-Refresh, alternativ
-  Personal Access Token; Verbindungsstatus inkl. Prüfung in den Einstellungen
-- **Mapping per Auswahl**: Deck-Board-Dropdown, GitHub-Project-Suche (eigene
-  und Organisations-Projects) mit manueller Eingabe als Fallback,
-  Duplikat-Schutz, transaktionales Löschen inkl. Links
-- **Issue-Modus optional**: Ohne Repository entstehen Project-Drafts; mit
-  Repository werden Drafts (auch bestehende) in Issues umgewandelt
-- **Automatik**: Cron-Job (Intervall einstellbar, min. 300 s) plus optionaler
-  GitHub-Webhook für Echtzeit; manueller Sync per Button oder
-  `php occ deckgithubsync:sync [mapping-id]`
-- **Große Boards**: Deck-Karten werden in Batches gelesen. Nach einem
-  vollständigen Abgleich werden GitHub-Items bei unveränderten Deck-Daten
-  über den Project-Filter `updated` eingegrenzt; mindestens einmal pro UTC-Tag
-  erfolgt ein vollständiger Abgleich.
-- **Sync-Logik**: Beide Richtungen für Anlage + Update, Last-Write-Wins,
-  getrennte Deck-/GitHub-Hashes (idempotent), Titel-Dedup bei neuen Mappings,
-  race-sichere Links, Session-Isolation für Cron
-- **Felder**: Titel, Beschreibung, Status, Labels, Assignees, Start- und
-  Fälligkeitsdatum, Erledigt-Status, Kommentare – Richtung pro Feld einstellbar
-- **Robustheit**: Optionale Felder (Labels, Assignees, Kommentare,
-  Schema-Anpassungen) laufen best-effort mit Warnungen statt Abbrüchen;
-  GraphQL-Fehler brechen laut ab statt still leer zu liefern; destruktive
-  Aktionen nur per explizitem Webhook-Event, nie per Listen-Abwesenheit
-- **Sprachen**: Englische Quelltexte und deutsche Übersetzung für Einstellungen
-  und API-Meldungen (`l10n/`)
-- **Tests & Doku**: 34 Unit-Tests, Docs unter `docs/`
+## Preview
 
-## Mapping
+The screenshots use a sample product-launch board in a local Nextcloud installation. They show the Deck data model and the app's setup screen; they do not represent a completed GitHub sync.
 
-| Deck | GitHub | Stand |
-|---|---|---|
-| Stack | Status-Option (ID, fehlende werden angelegt) | ✅ |
-| Titel/Beschreibung | DraftIssue + Issue | ✅ |
-| Label | Issue-Label (REST, fehlende werden angelegt) | ✅ |
-| Assignee | via User-Mapping-Tabelle | ✅ (ohne Mapping wird übersprungen) |
-| Kommentar | Issue-Comment (`[Deck]`/`[GitHub user]`) | ✅ |
-| Fälligkeit | Datumsfeld (auto-erkannt oder pro Mapping auswählbar) | ✅ |
-| Startdatum | separates Datumsfeld (`Start date` wird ggf. angelegt) | ✅ |
-| Erledigt | Issue open/closed | ✅ |
-| Archiv/Delete | nur per Webhook-Event (`deleted`/`archived`/`restored`) | ✅ |
-| PR | read-only Card | ✅ |
-| Anhang | — | Nicht unterstützt: private Nextcloud-Dateien sind für GitHub nicht abrufbar; Anhänge bleiben in Deck. |
+| Demo board | Card details |
+| --- | --- |
+| ![Nextcloud Deck demo board with five workflow columns and labelled cards](docs/screenshots/deck-demo-board.jpg) | ![Deck card with label, dates and a verification checklist](docs/screenshots/deck-card-details.jpg) |
 
-## Setup
+![Personal settings for connecting GitHub and mapping a Deck board](docs/screenshots/sync-settings.jpg)
 
-Die [manuelle Installation](docs/SETUP.md) beschreibt den Ablauf für eine
-reguläre Nextcloud-Instanz. Deck muss vorher aktiviert sein.
+## What it does
 
-## Benutzung
+- Maps a Deck board to a GitHub Project v2 and Deck stacks to its **Status** options.
+- Creates and updates cards and Project items in both directions. Without a repository, items are Project drafts; with a repository, the app uses GitHub Issues.
+- Syncs title, description, labels, assignees, start and due dates, completion state, and comments. Each field can be set to both directions, one direction, or off.
+- Offers GitHub OAuth or a personal access token for each user. A GitHub App can provide server-side credentials.
+- Runs on Nextcloud background jobs, with manual sync and an optional GitHub webhook.
 
-Siehe [Benutzung](docs/USAGE.md): verbinden, Mapping anlegen, Richtungen und
-Nutzer-Mapping verstehen, Automatik und manueller Sync.
+Deck attachments stay in Nextcloud. Assignees require a GitHub-to-Nextcloud user mapping. Pull requests appear as read-only Deck cards. Existing Issues are not moved between repositories.
 
-## Dev
+## Requirements
 
-- `php -l lib/...`, Unit-Tests im Server-Checkout:
-  `phpunit --bootstrap tests/bootstrap.php apps-extra/deckgithubsync/tests/Unit`
-- Frontend: `npm ci && npm run build` (`.mjs`-Module + CSS werden committet)
-- Deck muss installiert sein, sonst wirft `DeckService` mit klarer Meldung.
+- Nextcloud 30–36 and the **Deck** app
+- A GitHub account with access to a Project v2
+- System cron for scheduled sync
+- GitHub OAuth app or a suitable personal access token; a GitHub App is optional
 
-## Doku
+## Install and configure
 
-Kurz-Doku unter `docs/`: `SETUP.md`, `USAGE.md`, `ARCHITECTURE.md`, `API.md`,
-`TROUBLESHOOTING.md`.
+Until an App Store release is available, follow the [manual installation and setup guide](docs/SETUP.md). The repository includes built frontend assets, so installing from source does not require Node.js on the Nextcloud server.
+
+1. Enable Deck and install this app in a Nextcloud app directory named `deckgithubsync`.
+2. Configure a GitHub OAuth app in the Nextcloud admin settings, or connect with a personal access token.
+3. In personal settings, select a Deck board and GitHub Project. Optionally choose an Issue repository.
+4. Choose sync directions and user mappings, then run a manual sync on test data.
+5. Enable system cron and, if needed, a GitHub webhook.
+
+See [usage](docs/USAGE.md), [architecture](docs/ARCHITECTURE.md), [API](docs/API.md), and [troubleshooting](docs/TROUBLESHOOTING.md).
+Maintainers can use the [release guide](docs/RELEASE.md) for App Store packaging and signing.
+
+## Development
+
+```bash
+npm ci
+npm run build
+```
+
+The build writes JavaScript to `js/` and CSS to `css/`, where Nextcloud expects them. Both directories are included in releases. The PHP unit tests live under `tests/Unit/` and run inside a Nextcloud server checkout.
+
+Issues and suggestions: [GitHub Issues](https://github.com/SchVinzenz/Github-Projects-for-Deck/issues). Licensed under [AGPL-3.0-or-later](LICENSE).
