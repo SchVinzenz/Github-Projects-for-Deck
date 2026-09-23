@@ -27,7 +27,7 @@ Deck attachments stay in Nextcloud. Assignees require a GitHub-to-Nextcloud user
 
 ## Requirements
 
-- Nextcloud 30–36 and the **Deck** app
+- Nextcloud 31–36 and the **Deck** app
 - A GitHub account with access to a Project v2
 - System cron for scheduled sync
 - GitHub OAuth app or a suitable personal access token; a GitHub App is optional

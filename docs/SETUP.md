@@ -2,7 +2,7 @@
 
 ## Voraussetzungen
 
-- Nextcloud 30–36, Deck-App installiert und aktiviert
+- Nextcloud 31–36, Deck-App installiert und aktiviert
 - GitHub-Konto; für Server-Sync optional eine GitHub App, für Nutzer-Login optional eine GitHub OAuth App
 
 ## Manuelle Installation in einer regulären Nextcloud

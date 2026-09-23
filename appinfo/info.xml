@@ -46,7 +46,7 @@ Die Nextcloud-App Deck wird benötigt. Anhänge bleiben in Nextcloud und werden 
 	<screenshot>https://raw.githubusercontent.com/SchVinzenz/Github-Projects-for-Deck/main/docs/screenshots/deck-card-details.jpg</screenshot>
 	<screenshot>https://raw.githubusercontent.com/SchVinzenz/Github-Projects-for-Deck/main/docs/screenshots/sync-settings.jpg</screenshot>
 	<dependencies>
-		<nextcloud min-version="30" max-version="36"/>
+		<nextcloud min-version="31" max-version="36"/>
 	</dependencies>
 	<background-jobs>
 		<job>OCA\DeckGithubSync\BackgroundJob\SyncJob</job>
