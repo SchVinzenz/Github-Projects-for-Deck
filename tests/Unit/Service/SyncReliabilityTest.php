@@ -58,7 +58,7 @@ class SyncReliabilityTest extends TestCase {
 				'labels' => ['nodes' => [['name' => 'bug']]], 'assignees' => ['nodes' => []]],
 			'fieldValues' => ['nodes' => [[
 				'__typename' => 'ProjectV2ItemFieldSingleSelectValue', 'name' => 'In Progress',
-				'field' => ['name' => 'Status'],
+				'field' => ['id' => 'F1', 'name' => 'Status'],
 			]]],
 		]], 'hasNext' => false, 'cursor' => null]);
 		$github->method('getIssueComments')->willReturn([['id' => 99, 'body' => 'Hello', 'user' => 'bob', 'created_at' => '']]);

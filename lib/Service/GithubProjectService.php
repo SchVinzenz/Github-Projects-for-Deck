@@ -431,10 +431,18 @@ class GithubProjectService {
 		return array_values(array_filter($out));
 	}
 
-	public static function statusOf(array $item): string {
+	public static function statusOf(array $item, ?string $statusFieldId = null): string {
 		foreach ($item['fieldValues']['nodes'] ?? [] as $fv) {
-			if (($fv['__typename'] ?? '') === 'ProjectV2ItemFieldSingleSelectValue'
-				&& ($fv['field']['name'] ?? '') === 'Status') {
+			if (($fv['__typename'] ?? '') !== 'ProjectV2ItemFieldSingleSelectValue') {
+				continue;
+			}
+			if ($statusFieldId !== null && $statusFieldId !== '') {
+				if (($fv['field']['id'] ?? '') === $statusFieldId) {
+					return $fv['name'] ?? '';
+				}
+				continue;
+			}
+			if (($fv['field']['name'] ?? '') === 'Status') {
 				return $fv['name'] ?? '';
 			}
 		}

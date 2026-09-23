@@ -6,7 +6,7 @@
 		<section class="deckghs-card">
 			<div class="deckghs-connection-header">
 				<div>
-					<h2>GitHub verbinden</h2>
+					<h2><span class="deckghs-step" aria-hidden="true">1</span>GitHub verbinden</h2>
 					<p class="deckghs-muted">Verbinde dein persönliches GitHub-Konto für die Project-Synchronisation.</p>
 				</div>
 				<span v-if="!loading" class="deckghs-status" :class="status.connected ? 'connected' : 'disconnected'">
@@ -41,14 +41,15 @@
 		</section>
 
 		<section class="deckghs-card">
-			<h2>Board-Mappings</h2>
+			<h2><span class="deckghs-step" aria-hidden="true">2</span>Board-Mappings</h2>
 			<p v-if="!loading && !status.connected" class="deckghs-note deckghs-note-warn">Tipp: Verbinde zuerst oben dein GitHub-Konto – sonst schlägt das Anlegen fehl.</p>
 			<p v-if="!mappings.length" class="deckghs-muted">Noch keine Mappings. Lege unten dein erstes an.</p>
 			<article v-for="m in mappings" :key="m.id" class="deckghs-map">
 				<header>
-					<strong>{{ boardTitle(m.deckBoardId) }} <span class="deckghs-muted">↔ {{ m.githubOwner }}#{{ m.githubNumber }}</span></strong>
+					<strong class="deckghs-map-title">{{ boardTitle(m.deckBoardId) }} <span class="deckghs-muted">↔ {{ m.githubOwner }}#{{ m.githubNumber }}</span></strong>
 					<span class="deckghs-pill">{{ dirLabel(m.direction) }}</span>
 				</header>
+				<p class="deckghs-meta deckghs-muted">Sync: {{ m.lastSync ? new Date(m.lastSync * 1000).toLocaleString() : 'noch nie' }}</p>
 				<div class="deckghs-row">
 					<label>Richtung
 						<select v-model="m.direction" @change="update(m)">
@@ -61,12 +62,11 @@
 						<input v-model.trim="m.githubRepository" list="deckghs-repositories" placeholder="leer = Draft" @change="update(m)" />
 					</label>
 					<span class="deckghs-muted">Ein Repository wandelt verknüpfte Drafts beim nächsten Sync in Issues um.</span>
-					<span class="deckghs-muted">Sync: {{ m.lastSync ? new Date(m.lastSync * 1000).toLocaleString() : 'noch nie' }}</span>
 					<span class="deckghs-spacer" />
 					<button class="deckghs-btn primary" :disabled="syncing[m.id]" @click="sync(m)">{{ syncing[m.id] ? 'Läuft …' : 'Jetzt syncen' }}</button>
 					<button class="deckghs-btn danger" @click="remove(m)">Löschen</button>
 				</div>
-				<p v-if="results[m.id]" class="deckghs-muted">{{ results[m.id] }}</p>
+				<p v-if="results[m.id]" :class="results[m.id].includes('Fehler') ? 'deckghs-note deckghs-note-err' : 'deckghs-note deckghs-note-ok'">{{ results[m.id] }}</p>
 				<details>
 					<summary>Felder &amp; Nutzer</summary>
 					<div class="deckghs-fields">
@@ -94,7 +94,7 @@
 		</section>
 
 		<section class="deckghs-card">
-			<h2>Neues Mapping</h2>
+			<h2><span class="deckghs-step" aria-hidden="true">3</span>Neues Mapping</h2>
 			<p class="deckghs-muted">Wähle ein Deck-Board und ein GitHub Project. GitHub-Repositories sind keine Project-Mappings.</p>
 			<p class="deckghs-muted">Wähle ein Issue-Repository, damit Karten als GitHub Issues entstehen. Bereits verknüpfte Drafts werden beim nächsten Sync umgewandelt. Ohne Repository bleiben es Project-Drafts.</p>
 			<div class="deckghs-row">
@@ -400,8 +400,9 @@ export default {
 
 <style scoped>
 .deckghs-wrap { max-width: 860px; display: flex; flex-direction: column; gap: 16px; }
-.deckghs-card { border: 1px solid var(--color-border); border-radius: var(--border-radius-large); padding: 16px 20px; background: var(--color-main-background); }
-.deckghs-card h2 { margin: 0 0 12px; font-size: 1.1em; }
+.deckghs-card { border: 1px solid var(--color-border); border-radius: var(--border-radius-large); padding: 16px 20px 20px; background: var(--color-main-background); box-shadow: 0 1px 2px var(--color-box-shadow, rgb(0 0 0 / 5%)); }
+.deckghs-card h2 { margin: 0 0 12px; font-size: 1.1em; display: flex; align-items: center; gap: 10px; }
+.deckghs-step { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--color-primary-element); color: var(--color-primary-element-text, #fff); font-size: 0.75em; font-weight: bold; flex-shrink: 0; }
 .deckghs-muted { color: var(--color-text-maxcontrast); font-size: 0.9em; }
 .deckghs-note { border-radius: var(--border-radius); padding: 8px 12px; }
 .deckghs-note-ok { background: var(--color-success-background, #e6f4ea); }
@@ -425,14 +426,20 @@ export default {
 .deckghs-btn.primary { background: var(--color-primary-element); border-color: var(--color-primary-element); color: var(--color-primary-element-text, #fff); }
 .deckghs-btn.danger { color: var(--color-error); }
 .deckghs-btn:disabled { opacity: 0.5; cursor: default; }
-.deckghs-map { border-top: 1px solid var(--color-border); padding: 12px 0; }
-.deckghs-map header { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.deckghs-btn:focus-visible, .deckghs-row input:focus-visible, .deckghs-row select:focus-visible, .deckghs-fields select:focus-visible { outline: 2px solid var(--color-main-text); outline-offset: 1px; }
+.deckghs-map { border: 1px solid var(--color-border); border-radius: var(--border-radius); padding: 12px 14px; margin-top: 12px; background: var(--color-background-hover); }
+.deckghs-map header { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.deckghs-map-title { min-width: 0; overflow-wrap: anywhere; }
+.deckghs-meta { margin: 6px 0 0; }
 .deckghs-pill { font-size: 0.8em; border: 1px solid var(--color-border); border-radius: var(--border-radius-pill, 999px); padding: 2px 10px; color: var(--color-text-maxcontrast); white-space: nowrap; }
 .deckghs-spacer { flex: 1; }
 .deckghs-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; margin: 8px 0; }
 .deckghs-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 0.9em; }
 .deckghs-fields select { background: var(--color-main-background); border: 1px solid var(--color-border); border-radius: var(--border-radius); padding: 6px 8px; color: var(--color-main-text); }
 .deckghs-users { margin-top: 8px; }
+.deckghs-map details { margin-top: 8px; }
+.deckghs-map summary, .deckghs-pat summary { cursor: pointer; color: var(--color-text-maxcontrast); border-radius: var(--border-radius); padding: 2px 4px; display: inline-block; }
+.deckghs-map summary:hover, .deckghs-pat summary:hover { color: var(--color-main-text); background: var(--color-background-hover); }
 .deckghs-pat { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--color-border); }
 .deckghs-pat summary { cursor: pointer; color: var(--color-text-maxcontrast); }
 </style>

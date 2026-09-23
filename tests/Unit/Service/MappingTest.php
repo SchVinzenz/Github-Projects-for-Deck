@@ -32,10 +32,17 @@ class MappingTest extends TestCase {
 
 	public function testStatusExtraction(): void {
 		$item = ['fieldValues' => ['nodes' => [
-			['__typename' => 'ProjectV2ItemFieldSingleSelectValue', 'name' => 'In Progress', 'field' => ['name' => 'Status']],
+			['__typename' => 'ProjectV2ItemFieldSingleSelectValue', 'name' => 'In Progress', 'field' => ['id' => 'F1', 'name' => 'Status']],
 		]]];
 		$this->assertSame('In Progress', GithubProjectService::statusOf($item));
+		$this->assertSame('In Progress', GithubProjectService::statusOf($item, 'F1'));
+		$this->assertSame('', GithubProjectService::statusOf($item, 'OTHER'));
 		$this->assertSame('', GithubProjectService::statusOf(['fieldValues' => ['nodes' => []]]));
+		$renamed = ['fieldValues' => ['nodes' => [
+			['__typename' => 'ProjectV2ItemFieldSingleSelectValue', 'name' => 'Fertig', 'field' => ['id' => 'F9', 'name' => 'Phase']],
+		]]];
+		$this->assertSame('', GithubProjectService::statusOf($renamed));
+		$this->assertSame('Fertig', GithubProjectService::statusOf($renamed, 'F9'));
 	}
 
 	public function testLabelsAndAssigneesExtraction(): void {

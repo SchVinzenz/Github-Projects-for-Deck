@@ -22,13 +22,19 @@
 		<section class="deckghs-card">
 			<h2>GitHub OAuth <span class="deckghs-muted">(Login für Nutzer)</span></h2>
 			<p class="deckghs-muted">Einmal hier einrichten. Danach verbindet jeder Nextcloud-Benutzer sein eigenes GitHub-Konto in den persönlichen Einstellungen.</p>
-			<p class="deckghs-muted">OAuth App unter GitHub → Settings → Developer settings anlegen. Authorization callback URL:</p>
-			<p><code class="deckghs-code">{{ form.oauthCallbackUrl }}</code></p>
+			<ol class="deckghs-steps">
+				<li>OAuth App unter GitHub → Settings → Developer settings → OAuth Apps anlegen.</li>
+				<li>Als Authorization callback URL exakt eintragen:
+					<span class="deckghs-copyrow"><code class="deckghs-code">{{ form.oauthCallbackUrl }}</code>
+					<button class="deckghs-btn small" type="button" @click="copyCallback">{{ copied ? 'Kopiert ✓' : 'Kopieren' }}</button></span>
+				</li>
+				<li>Client ID und Client Secret unten eintragen und speichern.</li>
+			</ol>
 			<div class="deckghs-grid">
 				<label>Client ID <input v-model="form.oauthClientId" autocomplete="off" /></label>
 				<label>Client Secret <input v-model="form.oauthClientSecret" type="password" autocomplete="off" placeholder="Nur beim Ändern einfügen" /></label>
 			</div>
-			<p class="deckghs-muted">Client Secret: {{ hasOauthSecret ? 'gespeichert' : 'noch nicht gespeichert' }}. Die Callback-URL muss mit dem Eintrag bei GitHub übereinstimmen.</p>
+			<p class="deckghs-muted">Client Secret: {{ hasOauthSecret ? 'gespeichert' : 'noch nicht gespeichert' }}.</p>
 		</section>
 
 		<button class="deckghs-btn primary big" :disabled="saving" @click="save">{{ saving ? 'Speichert …' : 'Speichern' }}</button>
@@ -52,6 +58,7 @@ export default {
 			},
 			saving: false,
 			hasOauthSecret: false,
+			copied: false,
 			notice: '',
 			error: '',
 		}
@@ -70,6 +77,25 @@ export default {
 		}
 	},
 	methods: {
+		async copyCallback() {
+			const text = this.form.oauthCallbackUrl || ''
+			try {
+				if (navigator.clipboard?.writeText) {
+					await navigator.clipboard.writeText(text)
+				} else {
+					const ta = document.createElement('textarea')
+					ta.value = text
+					document.body.appendChild(ta)
+					ta.select()
+					document.execCommand('copy')
+					ta.remove()
+				}
+				this.copied = true
+				setTimeout(() => { this.copied = false }, 2000)
+			} catch (e) {
+				this.error = 'Kopieren fehlgeschlagen – URL bitte manuell markieren.'
+			}
+		},
 		async save() {
 			this.saving = true
 			this.error = ''
@@ -100,8 +126,10 @@ export default {
 
 <style scoped>
 .deckghs-wrap { max-width: 860px; display: flex; flex-direction: column; gap: 16px; }
-.deckghs-card { border: 1px solid var(--color-border); border-radius: var(--border-radius-large); padding: 16px 20px; background: var(--color-main-background); }
+.deckghs-card { border: 1px solid var(--color-border); border-radius: var(--border-radius-large); padding: 16px 20px 20px; background: var(--color-main-background); box-shadow: 0 1px 2px var(--color-box-shadow, rgb(0 0 0 / 5%)); }
 .deckghs-card h2 { margin: 0 0 8px; font-size: 1.1em; }
+.deckghs-steps { margin: 8px 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; font-size: 0.95em; }
+.deckghs-copyrow { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .deckghs-muted { color: var(--color-text-maxcontrast); font-size: 0.9em; }
 .deckghs-note { border-radius: var(--border-radius); padding: 8px 12px; }
 .deckghs-note-ok { background: var(--color-success-background, #e6f4ea); }
@@ -114,5 +142,7 @@ export default {
 .deckghs-btn { border: 1px solid var(--color-border); border-radius: var(--border-radius-pill, 999px); padding: 6px 14px; background: var(--color-main-background); color: var(--color-main-text); cursor: pointer; }
 .deckghs-btn.primary { background: var(--color-primary-element); border-color: var(--color-primary-element); color: var(--color-primary-element-text, #fff); }
 .deckghs-btn.big { align-self: flex-start; padding: 8px 24px; }
+.deckghs-btn.small { padding: 3px 10px; font-size: 0.85em; }
 .deckghs-btn:disabled { opacity: 0.5; cursor: default; }
+.deckghs-btn:focus-visible, .deckghs-card input:focus-visible, .deckghs-card textarea:focus-visible, .deckghs-card select:focus-visible { outline: 2px solid var(--color-main-text); outline-offset: 1px; }
 </style>

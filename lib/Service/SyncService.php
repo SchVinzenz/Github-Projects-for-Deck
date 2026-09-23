@@ -104,9 +104,18 @@ class SyncService {
 		$githubItems = [];
 		try {
 			$fields = $this->github->getFields($userId, $map->getGithubProjectId());
-			$statusFieldId = (string)($map->getStatusFieldId() ?: ($fields['statusFieldId'] ?? ''));
-			$dateFieldId = (string)($map->getDateFieldId() ?: ($fields['dateFieldId'] ?? ''));
-			$startFieldId = (string)($map->getStartFieldId() ?: ($fields['startDateFieldId'] ?? ''));
+			$knownIds = [];
+			foreach ($fields['fields'] ?? [] as $f) {
+				if (isset($f['id'])) {
+					$knownIds[(string)$f['id']] = true;
+				}
+			}
+			// Field IDs go stale when a field is deleted and recreated; adopt the
+			// detected ID, but only when the stored one no longer exists (never
+			// clobber a deliberate override of a still-existing field).
+			$statusFieldId = $this->refreshFieldId($map, 'status', $map->getStatusFieldId(), (string)($fields['statusFieldId'] ?? ''), $knownIds);
+			$dateFieldId = $this->refreshFieldId($map, 'due', $map->getDateFieldId(), (string)($fields['dateFieldId'] ?? ''), $knownIds);
+			$startFieldId = $this->refreshFieldId($map, 'start', $map->getStartFieldId(), (string)($fields['startDateFieldId'] ?? ''), $knownIds);
 			if ($dateFieldId !== '' && $dateFieldId === ($fields['startDateFieldId'] ?? '') && ($fields['dateFieldId'] ?? '') !== '') {
 				$dateFieldId = $fields['dateFieldId'];
 			}
@@ -119,15 +128,6 @@ class SyncService {
 					$this->warnings[] = 'Datum-Felder: ' . $e->getMessage();
 					$this->logger->warning('deckgithubsync: ensureDateFields failed', ['exception' => $e]);
 				}
-			}
-			if ($map->getStatusFieldId() === '' && $statusFieldId !== '') {
-				$map->setStatusFieldId($statusFieldId);
-			}
-			if ($map->getDateFieldId() !== $dateFieldId && $dateFieldId !== '') {
-				$map->setDateFieldId($dateFieldId);
-			}
-			if ($map->getStartFieldId() !== $startFieldId && $startFieldId !== '') {
-				$map->setStartFieldId($startFieldId);
 			}
 			$options = $fields['options']; // name => id
 			if ($statusFieldId !== '') {
@@ -267,7 +267,7 @@ class SyncService {
 							continue;
 						}
 						if ($allowToDeck && $allowToGithub && $this->newerSide($card, $gItem) === 'github') {
-							$patch = $this->pullGithubToDeck($map, $userId, $card, $gItem, $fieldMap, $stackByTitle, $dateFieldId, $userMap);
+							$patch = $this->pullGithubToDeck($map, $userId, $card, $gItem, $fieldMap, $stackByTitle, $dateFieldId, $userMap, $statusFieldId);
 							$existing->setGithubHash($this->hashGithub($gItem));
 							$existing->setDeckHash($this->hashDeck(array_merge($card, $patch)));
 							$this->itemMaps->update($existing);
@@ -367,7 +367,7 @@ class SyncService {
 							$this->itemMaps->update($link);
 							continue;
 						}
-						$patch = $this->pullGithubToDeck($map, $userId, $card, $item, $fieldMap, $stackByTitle, $dateFieldId, $userMap);
+						$patch = $this->pullGithubToDeck($map, $userId, $card, $item, $fieldMap, $stackByTitle, $dateFieldId, $userMap, $statusFieldId);
 						$link->setGithubHash($this->hashGithub($item));
 						if ($patch !== []) {
 							$link->setDeckHash($this->hashDeck(array_merge($card, $patch)));
@@ -394,7 +394,7 @@ class SyncService {
 					if (($content['__typename'] ?? '') === 'PullRequest') {
 						$body .= "\n\n[GitHub PR, read-only: " . ($content['url'] ?? '') . ']';
 					}
-					$status = GithubProjectService::statusOf($item);
+					$status = GithubProjectService::statusOf($item, $statusFieldId !== '' ? $statusFieldId : null);
 					$targetStack = $stackByTitle[strtolower($status)] ?? reset($stacks)['id'] ?? null;
 					if ($targetStack === null) {
 						continue;
@@ -564,7 +564,7 @@ class SyncService {
 			}
 		}
 		$stackTitle = $stackById[$card['stackId']] ?? '';
-		$currentStatus = GithubProjectService::statusOf($gItem);
+		$currentStatus = GithubProjectService::statusOf($gItem, $statusFieldId !== '' ? $statusFieldId : null);
 		if ($this->fieldAllowed($fieldMap, 'status', BoardMap::DIR_TO_GITHUB)
 			&& $stackTitle !== '' && $stackTitle !== $currentStatus
 			&& isset($options[mb_strtolower($stackTitle)]) && $statusFieldId !== '') {
@@ -616,7 +616,7 @@ class SyncService {
 		return null;
 	}
 
-	private function pullGithubToDeck(BoardMap $map, string $userId, array $card, array $gItem, array $fieldMap, array $stackByTitle, string $dateFieldId = '', array $userMap = []): array {
+	private function pullGithubToDeck(BoardMap $map, string $userId, array $card, array $gItem, array $fieldMap, array $stackByTitle, string $dateFieldId = '', array $userMap = [], string $statusFieldId = ''): array {
 		$content = $gItem['content'] ?? [];
 		$patch = [];
 		if ($this->fieldAllowed($fieldMap, 'title', BoardMap::DIR_TO_DECK) && isset($content['title']) && $content['title'] !== $card['title']) {
@@ -645,7 +645,7 @@ class SyncService {
 			}
 		}
 		if ($this->fieldAllowed($fieldMap, 'status', BoardMap::DIR_TO_DECK)) {
-			$status = GithubProjectService::statusOf($gItem);
+			$status = GithubProjectService::statusOf($gItem, $statusFieldId !== '' ? $statusFieldId : null);
 			if ($status !== '' && isset($stackByTitle[strtolower($status)]) && (int)$stackByTitle[strtolower($status)] !== (int)$card['stackId']) {
 				$patch['stackId'] = (int)$stackByTitle[strtolower($status)];
 			}
@@ -728,9 +728,36 @@ class SyncService {
 		return $map;
 	}
 
+	/**
+	 * Resolve the field ID to use: stored value wins, detected value fills
+	 * gaps. If the stored ID no longer exists (field deleted and recreated),
+	 * adopt the detected one – but never clobber a deliberate override of a
+	 * still-existing field. Persists changes on the map.
+	 */
+	private function refreshFieldId(BoardMap $map, string $which, string $stored, string $detected, array $knownIds): string {
+		if ($stored === '' && $detected !== '') {
+			$this->setMapFieldId($map, $which, $detected);
+			return $detected;
+		}
+		if ($stored !== '' && $detected !== '' && $stored !== $detected && !isset($knownIds[$stored])) {
+			$this->logger->info('deckgithubsync: adopting recreated field ID', ['field' => $which]);
+			$this->setMapFieldId($map, $which, $detected);
+			return $detected;
+		}
+		return $stored !== '' ? $stored : $detected;
+	}
+
+	private function setMapFieldId(BoardMap $map, string $which, string $id): void {
+		match ($which) {
+			'status' => $map->setStatusFieldId($id),
+			'due' => $map->setDateFieldId($id),
+			'start' => $map->setStartFieldId($id),
+			default => throw new \InvalidArgumentException('Unknown field ' . $which),
+		};
+	}
+
 	/** @return array{gh2deck: array<string,string>, deck2gh: array<string,string>} */
-	private function loadUserMap(int $mapId): array {
-		$gh2deck = [];
+	private function loadUserMap(int $mapId): array {		$gh2deck = [];
 		$deck2gh = [];
 		try {
 			foreach ($this->userMaps->findByMap($mapId) as $um) {
