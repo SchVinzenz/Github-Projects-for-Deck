@@ -1,5 +1,5 @@
 <template>
-	<div class="deckghs-wrap">
+	<div class="deckghs-wrap" :inert="loading" :aria-busy="loading">
 		<div v-if="notice" class="deckghs-note deckghs-note-ok" role="status">{{ notice }}</div>
 		<div v-if="error" class="deckghs-note deckghs-note-err" role="alert">{{ error }}</div>
 
@@ -9,9 +9,6 @@
 					<h2>{{ tr("Connect GitHub") }}</h2>
 					<p class="deckghs-muted">{{ tr("Connect your personal GitHub account to sync projects.") }}</p>
 				</div>
-				<span v-if="!loading" class="deckghs-status" :class="status.connected ? 'connected' : 'disconnected'">
-					<span class="deckghs-dot" />{{ status.connected ? tr('Connected') : tr('Not connected') }}
-				</span>
 			</div>
 			<div v-if="loading" class="deckghs-muted">{{ tr("Loading …") }}</div>
 			<div v-else class="deckghs-conn">
@@ -69,7 +66,9 @@
 				</div>
 				<p v-if="results[m.id]" :class="resultErrors[m.id] ? 'deckghs-note deckghs-note-err' : 'deckghs-note deckghs-note-ok'">{{ results[m.id] }}</p>
 				<details @toggle="loadDateFields(m, $event)">
-					<summary>{{ tr("Fields & users") }}</summary>
+					<summary>{{ tr("Field sync & assignees") }}</summary>
+					<p class="deckghs-muted">{{ tr("Choose which fields sync in each direction, then map GitHub assignees to Deck users.") }}</p>
+					<h3 class="deckghs-subheading">{{ tr("Field sync settings") }}</h3>
 					<label>{{ tr("GitHub due date field") }}
 						<select v-model="m.dateFieldId" @change="update(m)">
 							<option value="">{{ tr("Detect automatically") }}</option>
@@ -88,7 +87,8 @@
 					</div>
 					<p class="deckghs-muted">{{ tr("Deck attachments are not synced. Files remain available only in Nextcloud.") }}</p>
 					<div class="deckghs-users">
-						<p class="deckghs-muted">{{ tr("GitHub login → Deck user (for assignees)") }}</p>
+						<h3 class="deckghs-subheading">{{ tr("GitHub assignee mapping") }}</h3>
+						<p class="deckghs-muted">{{ tr("Match each GitHub username to a Deck user ID so assignees can sync.") }}</p>
 						<div v-for="(u, i) in m.userMap" :key="i" class="deckghs-row">
 							<input v-model="u.githubLogin" :placeholder="tr('GitHub login')" />
 							<input v-model="u.deckUid" :placeholder="tr('Deck user')" />
@@ -436,28 +436,23 @@ export default {
 </script>
 
 <style scoped>
-.deckghs-wrap { box-sizing: border-box; max-width: 860px; padding-left: clamp(40px, 5vw, 72px); display: flex; flex-direction: column; gap: 16px; }
+.deckghs-wrap { box-sizing: border-box; max-width: 860px; padding-left: clamp(40px, 5vw, 72px); display: flex; flex-direction: column; gap: 16px; font-size: 1.05rem; line-height: 1.5; }
 .deckghs-card { padding: 4px 0 20px; }
 .deckghs-card + .deckghs-card { border-top: 1px solid var(--color-border); padding-top: 20px; }
-.deckghs-card h2 { margin: 0 0 12px; font-size: 1.1em; }
-.deckghs-muted { color: var(--color-text-maxcontrast); font-size: 0.9em; }
+.deckghs-card h2 { margin: 0 0 12px; font-size: 1.35em; line-height: 1.3; }
+.deckghs-muted { color: var(--color-text-maxcontrast); }
 .deckghs-note { border-radius: var(--border-radius); padding: 8px 12px; }
 .deckghs-note-ok { background: color-mix(in srgb, var(--color-success, #46ba61) 18%, var(--color-main-background)); color: var(--color-main-text); }
 .deckghs-note-warn { background: color-mix(in srgb, var(--color-warning, #e6a817) 18%, var(--color-main-background)); color: var(--color-main-text); }
 .deckghs-note-err, .error { background: color-mix(in srgb, var(--color-error, #d2322d) 18%, var(--color-main-background)); color: var(--color-main-text); border-radius: var(--border-radius); padding: 8px 12px; }
 .deckghs-connection-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .deckghs-connection-header p { margin: 0 0 14px; }
-.deckghs-status { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border: 1px solid var(--color-border); border-radius: var(--border-radius-pill, 999px); font-size: 0.85em; white-space: nowrap; }
-.deckghs-status.connected { color: var(--color-success-text, var(--color-main-text)); background: var(--color-success-background, transparent); }
-.deckghs-status.disconnected { color: var(--color-text-maxcontrast); }
-.deckghs-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: var(--color-warning, #e6a817); }
-.deckghs-status.connected .deckghs-dot { background: var(--color-success, #46ba61); }
 .deckghs-conn { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 4px 0 12px; }
 .deckghs-conn-text { flex: 1; }
 .deckghs-conn-text p { margin: 4px 0 0; }
 .deckghs-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .deckghs-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin: 8px 0; }
-.deckghs-row label { display: flex; flex-direction: column; gap: 4px; font-size: 0.9em; }
+.deckghs-row label { display: flex; flex-direction: column; gap: 4px; }
 .deckghs-row input, .deckghs-row select, .deckghs-pat input { background: var(--color-main-background); border: 1px solid var(--color-border); border-radius: var(--border-radius); padding: 6px 8px; color: var(--color-main-text); }
 .deckghs-btn { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--color-border); border-radius: var(--border-radius-pill, 999px); padding: 6px 14px; background: var(--color-main-background); color: var(--color-main-text); cursor: pointer; text-decoration: none; }
 .deckghs-btn.primary { background: var(--color-primary-element); border-color: var(--color-primary-element); color: var(--color-primary-element-text, #fff); }
@@ -469,12 +464,13 @@ export default {
 .deckghs-map header { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .deckghs-map-title { min-width: 0; overflow-wrap: anywhere; }
 .deckghs-meta { margin: 6px 0 0; }
-.deckghs-pill { font-size: 0.8em; border: 1px solid var(--color-border); border-radius: var(--border-radius-pill, 999px); padding: 2px 10px; color: var(--color-text-maxcontrast); white-space: nowrap; }
+.deckghs-pill { font-size: 0.9em; border: 1px solid var(--color-border); border-radius: var(--border-radius-pill, 999px); padding: 2px 10px; color: var(--color-text-maxcontrast); white-space: nowrap; }
 .deckghs-spacer { flex: 1; }
 .deckghs-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; margin: 8px 0; }
-.deckghs-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 0.9em; }
+.deckghs-fields label { display: flex; flex-direction: column; gap: 4px; }
 .deckghs-fields select { background: var(--color-main-background); border: 1px solid var(--color-border); border-radius: var(--border-radius); padding: 6px 8px; color: var(--color-main-text); }
 .deckghs-users { margin-top: 8px; }
+.deckghs-subheading { margin: 16px 0 4px; font-size: 1.1em; }
 .deckghs-map details { margin-top: 8px; }
 .deckghs-map summary, .deckghs-pat summary { cursor: pointer; color: var(--color-text-maxcontrast); border-radius: var(--border-radius); padding: 2px 4px; display: inline-block; }
 .deckghs-map summary:hover, .deckghs-pat summary:hover { color: var(--color-main-text); background: var(--color-background-hover); }

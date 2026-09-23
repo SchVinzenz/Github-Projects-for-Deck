@@ -2,7 +2,7 @@
   "translations": {
     "Synchronization is already running. Check the result shortly.": "Die Synchronisierung läuft bereits. Prüfe das Ergebnis in Kürze.",
     "Synchronization failed. Check the Nextcloud server log.": "Synchronisierung fehlgeschlagen. Prüfe das Nextcloud-Serverprotokoll.",
-    "Deck and GitHub Sync": "Deck und GitHub synchronisieren",
+    "Deck and GitHub Sync": "Deck-GitHub-Sync",
     "Connect GitHub": "GitHub verbinden",
     "Connect your personal GitHub account to sync projects.": "Verbinde dein persönliches GitHub-Konto für die Project-Synchronisation.",
     "Loading …": "Wird geladen …",
@@ -23,7 +23,7 @@
     "Bidirectional": "Bidirektional",
     "A repository converts linked drafts to issues on the next sync.": "Ein Repository wandelt verknüpfte Drafts beim nächsten Sync in Issues um.",
     "Delete": "Löschen",
-    "Fields & users": "Felder & Nutzer",
+    "Fields & users": "Feldabgleich & Zuweisungen",
     "GitHub due date field": "GitHub-Feld für Fälligkeit",
     "Detect automatically": "Automatisch erkennen",
     "↔ both ways": "↔ beidseitig",
@@ -144,7 +144,11 @@
     "Issue repository": "Issue-Repository",
     "Not found": "Nicht gefunden",
     "Invalid direction": "Ungültige Richtung",
-    "GitHub rate limit – retry after": "GitHub-Limit – erneuter Versuch ab"
+    "GitHub rate limit – retry after": "GitHub-Limit – erneuter Versuch ab",
+    "Choose which fields sync in each direction, then map GitHub assignees to Deck users.": "Lege fest, welche Felder in welche Richtung synchronisiert werden, und ordne GitHub-Zuweisungen Deck-Benutzern zu.",
+    "Field sync settings": "Feldabgleich",
+    "GitHub assignee mapping": "Zuweisung von Benutzern",
+    "Match each GitHub username to a Deck user ID so assignees can sync.": "Ordne jeden GitHub-Benutzernamen einer Deck-Benutzerkennung zu, damit Zuweisungen synchronisiert werden."
   },
   "pluralForm": "nplurals=2; plural=(n != 1);"
 }

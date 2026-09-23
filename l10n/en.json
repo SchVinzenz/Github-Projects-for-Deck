@@ -2,7 +2,7 @@
   "translations": {
     "Synchronization is already running. Check the result shortly.": "Synchronization is already running. Check the result shortly.",
     "Synchronization failed. Check the Nextcloud server log.": "Synchronization failed. Check the Nextcloud server log.",
-    "Deck and GitHub Sync": "Deck and GitHub Sync",
+    "Deck and GitHub Sync": "Deck-GitHub Sync",
     "Connect GitHub": "Connect GitHub",
     "Connect your personal GitHub account to sync projects.": "Connect your personal GitHub account to sync projects.",
     "Loading …": "Loading …",
@@ -23,7 +23,7 @@
     "Bidirectional": "Bidirectional",
     "A repository converts linked drafts to issues on the next sync.": "A repository converts linked drafts to issues on the next sync.",
     "Delete": "Delete",
-    "Fields & users": "Fields & users",
+    "Fields & users": "Field sync & assignees",
     "GitHub due date field": "GitHub due date field",
     "Detect automatically": "Detect automatically",
     "↔ both ways": "↔ both ways",
@@ -144,7 +144,11 @@
     "Issue repository": "Issue repository",
     "Not found": "Not found",
     "Invalid direction": "Invalid direction",
-    "GitHub rate limit – retry after": "GitHub rate limit – retry after"
+    "GitHub rate limit – retry after": "GitHub rate limit – retry after",
+    "Choose which fields sync in each direction, then map GitHub assignees to Deck users.": "Choose which fields sync in each direction, then map GitHub assignees to Deck users.",
+    "Field sync settings": "Field sync settings",
+    "GitHub assignee mapping": "GitHub assignee mapping",
+    "Match each GitHub username to a Deck user ID so assignees can sync.": "Match each GitHub username to a Deck user ID so assignees can sync."
   },
   "pluralForm": "nplurals=2; plural=(n != 1);"
 }

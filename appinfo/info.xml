@@ -6,7 +6,7 @@
 <info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
       xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
 	<id>deckgithubsync</id>
-	<name>Deck and GitHub Sync</name>
+	<name>Deck-GitHub Sync</name>
 	<summary>Keep Nextcloud Deck boards and GitHub Projects in sync</summary>
 	<summary lang="de">Nextcloud Deck-Boards mit GitHub Projects synchronisieren</summary>
 	<description><![CDATA[Connect a Nextcloud Deck board to a GitHub Project and keep cards and project items aligned.

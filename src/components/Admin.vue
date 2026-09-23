@@ -130,18 +130,18 @@ export default {
 </script>
 
 <style scoped>
-.deckghs-wrap { box-sizing: border-box; max-width: 860px; padding-left: clamp(40px, 5vw, 72px); display: flex; flex-direction: column; gap: 16px; }
+.deckghs-wrap { box-sizing: border-box; max-width: 860px; padding-left: clamp(40px, 5vw, 72px); display: flex; flex-direction: column; gap: 16px; font-size: 1.05rem; line-height: 1.5; }
 .deckghs-card { padding: 4px 0 20px; }
 .deckghs-card + .deckghs-card { border-top: 1px solid var(--color-border); padding-top: 20px; }
-.deckghs-card h2 { margin: 0 0 8px; font-size: 1.1em; }
-.deckghs-steps { margin: 8px 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; font-size: 0.95em; }
+.deckghs-card h2 { margin: 0 0 8px; font-size: 1.35em; line-height: 1.3; }
+.deckghs-steps { margin: 8px 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
 .deckghs-copyrow { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
-.deckghs-muted { color: var(--color-text-maxcontrast); font-size: 0.9em; }
+.deckghs-muted { color: var(--color-text-maxcontrast); }
 .deckghs-note { border-radius: var(--border-radius); padding: 8px 12px; }
 .deckghs-note-ok { background: color-mix(in srgb, var(--color-success, #46ba61) 18%, var(--color-main-background)); color: var(--color-main-text); }
 .deckghs-note-err { background: color-mix(in srgb, var(--color-error, #d2322d) 18%, var(--color-main-background)); color: var(--color-main-text); border-radius: var(--border-radius); padding: 8px 12px; }
 .deckghs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px 12px; margin: 8px 0; }
-.deckghs-grid label, .deckghs-block { display: flex; flex-direction: column; gap: 4px; font-size: 0.9em; }
+.deckghs-grid label, .deckghs-block { display: flex; flex-direction: column; gap: 4px; }
 .deckghs-block { margin: 8px 0; }
 .deckghs-card input, .deckghs-card textarea { background: var(--color-main-background); border: 1px solid var(--color-border); border-radius: var(--border-radius); padding: 6px 8px; color: var(--color-main-text); font-family: monospace; }
 .deckghs-code { background: var(--color-background-hover); border-radius: var(--border-radius); padding: 4px 8px; font-size: 0.9em; word-break: break-all; }
