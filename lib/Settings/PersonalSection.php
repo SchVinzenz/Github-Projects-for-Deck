@@ -26,7 +26,7 @@ class PersonalSection implements IIconSection {
 	}
 
 	public function getName(): string {
-		return $this->l->t('Deck ↔ GitHub Projects');
+		return $this->l->t('Deck and GitHub Sync');
 	}
 
 	public function getPriority(): int {

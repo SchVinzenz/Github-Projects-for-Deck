@@ -42,14 +42,14 @@ npm ci && npm run build
 ## GitHub anbinden (Nutzer, empfohlen)
 
 1. Ein Admin richtet einmalig die GitHub OAuth App ein:
-   **Einstellungen → Deck ↔ GitHub Projects** → Abschnitt *GitHub OAuth*:
+   **Einstellungen → Deck und GitHub synchronisieren** → Abschnitt *GitHub OAuth*:
    GitHub → Settings → Developer settings → OAuth Apps → New OAuth App,
    Authorization callback URL exakt aus dem Admin-Formular übernehmen.
    Client ID + Client Secret eintragen, speichern. Die angezeigte URL
    muss auf die öffentlich erreichbare Nextcloud-Adresse zeigen
    (bei Reverse Proxy ggf. `overwritehost`/`overwriteprotocol` prüfen).
 2. Danach verbindet **jeder Nextcloud-Benutzer sein eigenes GitHub-Konto**:
-   **Persönliche Einstellungen → Deck ↔ GitHub Projects** →
+   **Persönliche Einstellungen → Deck und GitHub synchronisieren** →
    *Mit GitHub verbinden* klicken und auf GitHub bestätigen.
    Ablaufende OAuth-Tokens werden mit dem Refresh-Token erneuert.
    Bereits verbundene Nutzer sollten sich für die Organisationserkennung
