@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\DeckGithubSync\AppInfo;
 
+use OCA\DeckGithubSync\Listener\DeckChangeListener;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
@@ -22,6 +23,13 @@ class Application extends App implements IBootstrap {
 	}
 
 	public function register(IRegistrationContext $context): void {
+		$context->registerEventListener('OCA\\Deck\\Event\\CardCreatedEvent', DeckChangeListener::class);
+		$context->registerEventListener('OCA\\Deck\\Event\\CardUpdatedEvent', DeckChangeListener::class);
+		$context->registerEventListener('OCA\\Deck\\Event\\CardDeletedEvent', DeckChangeListener::class);
+		$context->registerEventListener('OCA\\Deck\\Event\\BoardUpdatedEvent', DeckChangeListener::class);
+		$context->registerEventListener('OCP\\Comments\\Events\\CommentAddedEvent', DeckChangeListener::class);
+		$context->registerEventListener('OCP\\Comments\\Events\\CommentUpdatedEvent', DeckChangeListener::class);
+		$context->registerEventListener('OCP\\Comments\\CommentsEvent', DeckChangeListener::class);
 	}
 
 	public function boot(IBootContext $context): void {

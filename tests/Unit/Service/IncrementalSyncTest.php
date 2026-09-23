@@ -13,6 +13,7 @@ use OCA\DeckGithubSync\Service\DeckService;
 use OCA\DeckGithubSync\Service\GithubProjectService;
 use OCA\DeckGithubSync\Service\SyncService;
 use OCP\IL10N;
+use OCP\Lock\ILockingProvider;
 use OCP\IUserManager;
 use OCP\IUserSession;
 use PHPUnit\Framework\TestCase;
@@ -32,7 +33,7 @@ class IncrementalSyncTest extends TestCase {
 		$deck->method('getComments')->with(20)->willReturn(['New comment']);
 		$sync = new SyncService($this->createMock(BoardMapMapper::class), $this->createMock(ItemMapMapper::class),
 			$this->createMock(UserMapMapper::class), $deck, $this->createMock(GithubProjectService::class),
-			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class));
+			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class), $this->createMock(ILockingProvider::class));
 		$link->setDeckHash($sync->hashDeck($card));
 		$this->assertFalse((new \ReflectionMethod($sync, 'canSyncIncrementally'))->invoke($sync, $map, [$card], ['deck:20' => $link], $map->getFieldMap(), true));
 	}
@@ -75,7 +76,7 @@ class IncrementalSyncTest extends TestCase {
 		$l = $this->createMock(IL10N::class);
 		$l->method('t')->willReturnCallback(static fn (string $source): string => $source);
 		$sync = new SyncService($maps, $items, $users, $deck, $github,
-			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $l);
+			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $l, $this->createMock(ILockingProvider::class));
 		$link->setDeckHash($sync->hashDeck($card));
 		$result = $sync->syncBoard($map);
 		$this->assertSame([], $result['errors']);

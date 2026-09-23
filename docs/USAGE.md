@@ -9,9 +9,11 @@ Ja. Nach dem Anlegen eines Mappings musst du nichts weiter tun:
   reguläre Nextcloud-Hintergrundjob per System-Cron laufen
   (`cron.php`, siehe Nextcloud-Doku) – der AJAX-Modus reicht für
   regelmäßige Syncs nicht aus.
-- Mit konfiguriertem **Webhook** (GitHub App, Events `projects_v2_item`)
-  wird das betroffene Mapping sofort fällig gestellt und beim nächsten
-  Cron-Lauf synchronisiert – quasi Echtzeit.
+- Deck-Änderungen und ein konfigurierter **GitHub-Webhook** (GitHub App,
+  Events `projects_v2_item` und `issues`) stellen das betroffene Mapping
+  nach einer kurzen Bündelung in die Job-Warteschlange. Mit einem laufenden
+  Nextcloud-Worker erfolgt der Sync wenige Sekunden später; ohne Worker beim
+  nächsten Cron-Lauf.
 - Der Button **Jetzt syncen** und `php occ deckgithubsync:sync [mapping-id]`
   sind nur für manuelle Zwischen-Syncs da. Die Statistik zeigt pro Lauf
   `deck_to_github`, `github_to_deck`, `errors` und `warnings`.

@@ -58,13 +58,14 @@ class ProjectDiscoveryTest extends TestCase {
 			self::assertStringContainsString('convertProjectV2DraftIssueItemToIssue', $query);
 			self::assertStringContainsString('__typename', $query);
 			self::assertSame(substr_count($query, '{'), substr_count($query, '}'), 'GraphQL mutation must close every selection set');
-			self::assertSame(['project' => 'P1', 'item' => 'I1', 'repo' => 'R1'], $vars);
+			self::assertStringNotContainsString('projectId:', $query);
+			self::assertSame(['item' => 'I1', 'repo' => 'R1'], $vars);
 			return ['data' => ['convertProjectV2DraftIssueItemToIssue' => ['item' => [
 				'id' => 'I1', 'content' => ['__typename' => 'Issue', 'number' => 7],
 			]]]];
 		});
 		$service = new GithubProjectService($client, $this->createMock(LoggerInterface::class));
-		$this->assertSame('Issue', $service->convertDraftToIssue('alice', 'P1', 'I1', 'org/repo')['content']['__typename']);
+		$this->assertSame('Issue', $service->convertDraftToIssue('alice', 'I1', 'org/repo')['content']['__typename']);
 	}
 
 	public function testResolvesPersonalProjectWhenOrganizationLookupWouldFail(): void {

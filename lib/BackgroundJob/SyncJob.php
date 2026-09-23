@@ -25,6 +25,7 @@ class SyncJob extends TimedJob {
 		private LoggerInterface $logger,
 	) {
 		parent::__construct($time);
+		$this->setAllowParallelRuns(false);
 		$interval = (int)$this->config->getAppValue('deckgithubsync', 'sync_interval', '900');
 		$this->setInterval(max(300, $interval));
 	}

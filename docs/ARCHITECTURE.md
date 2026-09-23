@@ -16,7 +16,8 @@ Deck (Board/Stack/Card)  <--DeckService-->  SyncService  <--GithubProjectService
 | `Controller/SettingsController` | Mappings-CRUD, User-Mapping, Boards-Liste, Token-Status/Set/Unset, Admin-Config |
 | `Controller/SyncController` | Manueller Sync-Trigger + Status |
 | `Controller/WebhookController` | Öffentlicher GitHub-Webhook (HMAC, Bot-Filter, `deleted`/`archived`/`restored`-Events werden direkt angewendet, sonst Routing per `project_node_id` → Mapping wird fällig gestellt) |
-| `BackgroundJob/SyncJob` | Cron-Job (TimedJob, Intervall aus Config, min. 300 s) |
+| `BackgroundJob/SyncJob` | Regelmäßiger Cron-Abgleich (TimedJob, Intervall aus Config, min. 300 s) |
+| `Listener/DeckChangeListener`, `Service/SyncQueueService`, `BackgroundJob/EventSyncJob` | Deck-Ereignisse und GitHub-Webhooks bündeln pro Mapping einen verzögerten Job; ein dedizierter Worker kann ihn binnen Sekunden abarbeiten |
 | `Command/SyncCommand` | `occ deckgithubsync:sync [id]` |
 
 ## Datenmodell

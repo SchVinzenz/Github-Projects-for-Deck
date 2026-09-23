@@ -10,6 +10,7 @@ use OCA\DeckGithubSync\Db\BoardMapMapper;
 use OCA\DeckGithubSync\Db\ItemMap;
 use OCA\DeckGithubSync\Db\ItemMapMapper;
 use OCA\DeckGithubSync\Service\DeckService;
+use OCA\DeckGithubSync\Service\SyncQueueService;
 use OCP\IConfig;
 use OCP\IRequest;
 use PHPUnit\Framework\TestCase;
@@ -28,10 +29,10 @@ class IssueWebhookTest extends TestCase {
 		$map->setLastSync(123);
 		$maps = $this->createMock(BoardMapMapper::class);
 		$maps->expects($this->once())->method('findById')->with(1)->willReturn($map);
-		$maps->expects($this->once())->method('update')->with($map);
+		$queue = $this->createMock(SyncQueueService::class);
+		$queue->expects($this->once())->method('queueMap')->with($map);
 		$controller = new WebhookController('deckgithubsync', $this->createMock(IRequest::class), $this->createMock(IConfig::class),
-			$maps, $items, $this->createMock(DeckService::class), $this->createMock(LoggerInterface::class));
+			$maps, $items, $this->createMock(DeckService::class), $queue, $this->createMock(LoggerInterface::class));
 		$this->assertSame(1, (new \ReflectionMethod($controller, 'queueIssue'))->invoke($controller, 'ISSUE1'));
-		$this->assertSame(0, $map->getLastSync());
 	}
 }

@@ -95,8 +95,20 @@ Der Sync läuft ohne Klicks: Der Cron-Job (`SyncJob`) synchronisiert alle
 fälligen Mappings, das Intervall steht in den Admin-Einstellungen
 (Minimum 300 s). Voraussetzung ist der reguläre Nextcloud-Hintergrundjob
 per System-Cron (`cron.php`); der AJAX-Modus reicht nicht für verlässliche
-Intervalle. Mit Webhook (siehe unten) wird das betroffene Mapping sofort
-fällig gestellt und beim nächsten Cron-Lauf synchronisiert.
+Intervalle. Deck-Änderungen und GitHub-Webhooks stellen das betroffene Mapping
+zusätzlich nach fünf Sekunden Ruhe in die Job-Warteschlange. Ohne separaten
+Worker läuft dieser Job beim nächsten regulären Cron-Durchlauf.
+
+Für Syncs wenige Sekunden nach einer Änderung zusätzlich einen dauerhaft
+laufenden Nextcloud-Worker für diese App einrichten (als `www-data`, z. B. per
+systemd mit automatischem Neustart):
+
+```bash
+sudo -u www-data php occ background-job:worker --interval=1 'OCA\DeckGithubSync\BackgroundJob\EventSyncJob'
+```
+
+Den regulären System-Cron für den 15-Minuten-Abgleich und andere Nextcloud-Jobs
+weiterlaufen lassen. Der Worker verarbeitet nur die Änderungs-Jobs dieser App.
 
 ## Webhook (optional, für Echtzeit)
 
@@ -105,7 +117,7 @@ GitHub App → Webhook auf
 zeigen lassen (Events: `projects_v2_item`, `issues`). Ein identisches
 zufälliges Secret bei GitHub und in den Admin-Einstellungen hinterlegen;
 ohne Secret lehnt die App Webhook-Anfragen ab. Ohne Webhook greift der Cron-Job
-(Intervall einstellbar, min. 300 s).
+(Intervall einstellbar, min. 300 s) weiterhin für GitHub-Änderungen.
 
 Die regulären Nextcloud-Hintergrundjobs sollten per System-Cron laufen.
 Vor dem ersten bidirektionalen Sync ein Backup des Deck-Boards und des

@@ -13,6 +13,7 @@ use OCA\DeckGithubSync\Db\BoardMap;
 use OCA\DeckGithubSync\Db\BoardMapMapper;
 use OCA\DeckGithubSync\Db\ItemMapMapper;
 use OCA\DeckGithubSync\Service\DeckService;
+use OCA\DeckGithubSync\Service\SyncQueueService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\PublicPage;
@@ -27,8 +28,8 @@ use Psr\Log\LoggerInterface;
  *
  * Destructive actions (deleted/archived) are only executed on explicit
  * webhook events, never on listing absence: absence can mean a partial or
- * failed listing. Everything else only marks affected maps as due; the
- * SyncJob executes the sync.
+ * failed listing. Everything else queues a short-delayed sync for the
+ * affected mapping; the periodic SyncJob remains a fallback.
  */
 class WebhookController extends Controller {
 	public function __construct(
@@ -38,6 +39,7 @@ class WebhookController extends Controller {
 		private BoardMapMapper $maps,
 		private ItemMapMapper $items,
 		private DeckService $deck,
+		private SyncQueueService $queue,
 		private LoggerInterface $logger,
 	) {
 		parent::__construct($appName, $request);
@@ -80,7 +82,7 @@ class WebhookController extends Controller {
 				&& in_array($action, ['deleted', 'archived', 'restored'], true)) {
 				$handled += $this->applyItemEvent($map->getUserId(), (int)$map->getId(), (string)($item['node_id'] ?? ''), $action);
 			}
-			$this->queueMap($map);
+			$this->queue->queueMap($map);
 			$queued++;
 		}
 		$this->logger->info('deckgithubsync webhook', ['event' => $event, 'action' => $action, 'handled' => $handled, 'queued' => $queued]);
@@ -98,22 +100,13 @@ class WebhookController extends Controller {
 			$seen[$mapId] = true;
 			try {
 				$map = $this->maps->findById($mapId);
-				$this->queueMap($map);
+				$this->queue->queueMap($map);
 				$queued++;
 			} catch (\Throwable $e) {
 				$this->logger->warning('deckgithubsync: issue webhook mapping lookup failed', ['map' => $mapId, 'exception' => $e]);
 			}
 		}
 		return $queued;
-	}
-
-	private function queueMap(BoardMap $map): void {
-		// A future lastSync is a GitHub rate-limit cooldown.
-		if ($map->getLastSync() > time()) {
-			return;
-		}
-		$map->setLastSync(0);
-		$this->maps->update($map);
 	}
 
 	private function applyItemEvent(string $userId, int $mapId, string $itemNodeId, string $action): int {

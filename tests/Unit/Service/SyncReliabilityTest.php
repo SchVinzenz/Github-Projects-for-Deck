@@ -13,6 +13,7 @@ use OCA\DeckGithubSync\Service\DeckService;
 use OCA\DeckGithubSync\Service\GithubProjectService;
 use OCA\DeckGithubSync\Service\SyncService;
 use OCP\IL10N;
+use OCP\Lock\ILockingProvider;
 use OCP\IUserManager;
 use OCP\IUserSession;
 use PHPUnit\Framework\TestCase;
@@ -64,7 +65,7 @@ class SyncReliabilityTest extends TestCase {
 		]], 'hasNext' => false, 'cursor' => null]);
 		$github->method('getIssueComments')->willReturn([['id' => 99, 'body' => 'Hello', 'user' => 'bob', 'created_at' => '']]);
 		$sync = new SyncService($boardMaps, $itemMaps, $userMaps, $deck, $github,
-			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class));
+			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class), $this->createMock(ILockingProvider::class));
 		$result = $sync->syncBoard($map);
 		$this->assertSame([], $result['errors']);
 		$this->assertSame(1, $result['github_to_deck']);
@@ -101,7 +102,7 @@ class SyncReliabilityTest extends TestCase {
 		$github->method('ensureDateFields')->willReturn(['startDateFieldId' => 'S1', 'dateFieldId' => 'D1']);
 		$github->method('listItems')->willReturn(['items' => [], 'hasNext' => false, 'cursor' => null]);
 		$github->method('addDraft')->willReturn('I1');
-		$github->expects($this->once())->method('convertDraftToIssue')->with('alice', 'P1', 'I1', 'org/repo')->willReturn([
+		$github->expects($this->once())->method('convertDraftToIssue')->with('alice', 'I1', 'org/repo')->willReturn([
 			'id' => 'I1', 'content' => [
 				'__typename' => 'Issue', 'id' => 'ISSUE1', 'number' => 7,
 				'title' => 'A card', 'body' => 'Body', 'closed' => false,
@@ -112,7 +113,7 @@ class SyncReliabilityTest extends TestCase {
 		$github->expects($this->once())->method('setIssueLabels')->with('alice', 'org/repo', 7, ['bug']);
 		$github->expects($this->once())->method('setStatus')->with('alice', 'P1', 'I1', 'F1', 'O1');
 		$sync = new SyncService($boardMaps, $itemMaps, $userMaps, $deck, $github,
-			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class));
+			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class), $this->createMock(ILockingProvider::class));
 		$result = $sync->syncBoard($map);
 		$this->assertSame([], $result['errors']);
 		$this->assertSame(1, $result['deck_to_github']);
@@ -159,7 +160,7 @@ class SyncReliabilityTest extends TestCase {
 		$github->expects($this->never())->method('addDraft');
 		$github->expects($this->once())->method('setStatus')->with('alice', 'P1', 'I1', 'F1', 'O1');
 		$sync = new SyncService($boardMaps, $itemMaps, $userMaps, $deck, $github,
-			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class));
+			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class), $this->createMock(ILockingProvider::class));
 		$result = $sync->syncBoard($map);
 		$this->assertSame([], $result['errors']);
 		$this->assertSame(1, $result['deck_to_github']);
@@ -212,7 +213,7 @@ class SyncReliabilityTest extends TestCase {
 		});
 
 		$sync = new SyncService($boardMaps, $itemMaps, $userMaps, $deck, $github,
-			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class));
+			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class), $this->createMock(ILockingProvider::class));
 		$result = $sync->syncBoard($map);
 		$this->assertCount(1, $result['errors']);
 		$this->assertSame(0, $result['deck_to_github']);
@@ -252,7 +253,7 @@ class SyncReliabilityTest extends TestCase {
 		$github->method('addDraft')->willReturn('I1');
 		$github->expects($this->once())->method('setStatus')->with('alice', 'P1', 'I1', 'F1', 'O1');
 		$sync = new SyncService($maps, $items, $this->createMock(UserMapMapper::class), $deck, $github,
-			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class));
+			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class), $this->createMock(ILockingProvider::class));
 		$result = $sync->syncBoard($map);
 		$this->assertSame([], $result['errors']);
 		$this->assertSame('DUE', $map->getDateFieldId());
@@ -307,7 +308,7 @@ class SyncReliabilityTest extends TestCase {
 		]);
 
 		$sync = new SyncService($maps, $items, $users, $deck, $github,
-			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class));
+			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class), $this->createMock(ILockingProvider::class));
 		$result = $sync->syncBoard($map);
 
 		$this->assertSame([], $result['errors']);

@@ -37,6 +37,14 @@ class BoardMapMapper extends QBMapper {
 	}
 
 	/** @return BoardMap[] */
+	public function findByDeckBoard(int $boardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->eq('deck_board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)));
+		return $this->findEntities($qb);
+	}
+
+	/** @return BoardMap[] */
 	public function findAllDue(int $olderThan, ?int $now = null): array {
 		$now ??= time();
 		$qb = $this->db->getQueryBuilder();

@@ -18,6 +18,7 @@ use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IUserManager;
 use OCP\IL10N;
 use OCP\IUserSession;
+use OCP\Lock\ILockingProvider;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -26,6 +27,12 @@ use Psr\Log\LoggerInterface;
  * PR items are read-only (GitHub -> Deck only).
  */
 class SyncService {
+	private static int $activeRuns = 0;
+
+	public static function isRunning(): bool {
+		return self::$activeRuns > 0;
+	}
+
 	public function __construct(
 		private BoardMapMapper $boardMaps,
 		private ItemMapMapper $itemMaps,
@@ -36,6 +43,7 @@ class SyncService {
 		private IUserSession $userSession,
 		private LoggerInterface $logger,
 		private IL10N $l,
+		private ILockingProvider $locks,
 	) {
 	}
 
@@ -65,8 +73,12 @@ class SyncService {
 	}
 
 	public function syncBoard(BoardMap $map): array {
-		$prevUid = $this->userSession->getUser()?->getUID();
+		$lockPath = 'deckgithubsync:map:' . $map->getId();
+		$this->locks->acquireLock($lockPath, ILockingProvider::LOCK_EXCLUSIVE);
+		self::$activeRuns++;
+		$prevUid = null;
 		try {
+			$prevUid = $this->userSession->getUser()?->getUID();
 			if ($map->getCooldownUntil() > time()) {
 				$retryAt = $map->getCooldownUntil();
 				return [
@@ -85,8 +97,13 @@ class SyncService {
 			$this->boardMaps->update($map);
 			return ['deck_to_github' => 0, 'github_to_deck' => 0, 'errors' => [$e->getMessage()], 'warnings' => $this->warnings, 'retryAt' => $e->getRetryAt()];
 		} finally {
-			if ($this->userSession->getUser()?->getUID() !== $prevUid) {
-				$this->userSession->setUser($prevUid === null ? null : $this->userManager->get($prevUid));
+			self::$activeRuns--;
+			try {
+				if ($this->userSession->getUser()?->getUID() !== $prevUid) {
+					$this->userSession->setUser($prevUid === null ? null : $this->userManager->get($prevUid));
+				}
+			} finally {
+				$this->locks->releaseLock($lockPath, ILockingProvider::LOCK_EXCLUSIVE);
 			}
 		}
 	}
@@ -324,7 +341,7 @@ class SyncService {
 							$existing->setSyncHash('pending_draft');
 							$this->itemMaps->update($existing);
 							$oldId = $gItem['id'];
-							$gItem = $this->github->convertDraftToIssue($userId, $map->getGithubProjectId(), $oldId, $map->getGithubRepository());
+							$gItem = $this->github->convertDraftToIssue($userId, $oldId, $map->getGithubRepository());
 							$skipGithubItems[$oldId] = true;
 							$skipGithubItems[$gItem['id']] = true;
 							$existing->setGithubItemId($gItem['id']);
@@ -382,7 +399,7 @@ class SyncService {
 						}
 						$known['deck:' . $card['id']] = $known['gh:' . $itemId] = $im;
 						if ($map->getGithubRepository() !== '') {
-							$issueItem = $this->github->convertDraftToIssue($userId, $map->getGithubProjectId(), $itemId, $map->getGithubRepository());
+							$issueItem = $this->github->convertDraftToIssue($userId, $itemId, $map->getGithubRepository());
 							$itemId = $issueItem['id'];
 							$im->setGithubItemId($itemId);
 							$im->setGithubContentId($issueItem['content']['id'] ?? '');
