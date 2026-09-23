@@ -130,7 +130,7 @@ export default {
 </script>
 
 <style scoped>
-.deckghs-wrap { box-sizing: border-box; max-width: 860px; padding-left: clamp(16px, 3vw, 32px); display: flex; flex-direction: column; gap: 16px; }
+.deckghs-wrap { box-sizing: border-box; max-width: 860px; padding-left: clamp(40px, 5vw, 72px); display: flex; flex-direction: column; gap: 16px; }
 .deckghs-card { padding: 4px 0 20px; }
 .deckghs-card + .deckghs-card { border-top: 1px solid var(--color-border); padding-top: 20px; }
 .deckghs-card h2 { margin: 0 0 8px; font-size: 1.1em; }
