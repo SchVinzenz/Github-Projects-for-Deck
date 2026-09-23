@@ -50,6 +50,7 @@
 					<span class="deckghs-pill">{{ dirLabel(m.direction) }}</span>
 				</header>
 				<p class="deckghs-meta deckghs-muted">Sync: {{ m.lastSync ? new Date(m.lastSync * 1000).toLocaleString() : tr('never') }}</p>
+				<p v-if="m.cooldownUntil && m.cooldownUntil * 1000 > Date.now()" class="deckghs-meta deckghs-note deckghs-note-warn">{{ tr('GitHub rate limit – retry after') }} {{ new Date(m.cooldownUntil * 1000).toLocaleString() }}</p>
 				<div class="deckghs-row">
 					<label>{{ tr("Direction") }}
 						<select v-model="m.direction" @change="update(m)">
@@ -376,6 +377,9 @@ export default {
 					this.error = data.errors.join('; ')
 				} else {
 					m.lastSync = Math.floor(Date.now() / 1000)
+				}
+				if (data.retryAt) {
+					m.cooldownUntil = data.retryAt
 				}
 				if (warns && !errs) {
 					this.notice = data.warnings.join('; ')

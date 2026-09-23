@@ -42,6 +42,12 @@ class SyncService {
 	/** Non-critical sync problems collected during a run (best-effort fields). */
 	private array $warnings = [];
 
+	/** True when field IDs were (re)assigned this run: hashes may be stale. */
+	private bool $schemaChanged = false;
+
+	/** True when preexisting links with hashes exist (stale-schema bypass applies). */
+	private bool $hasEstablishedLinks = false;
+
 	/**
 	 * Run a best-effort sync step: failures are recorded as warnings and do
 	 * not abort the item sync (unlike title/status/date failures).
@@ -63,8 +69,9 @@ class SyncService {
 		try {
 			return $this->doSyncBoard($map);
 		} catch (GithubRateLimitException $e) {
-			// A future lastSync prevents cron and webhooks from hammering GitHub.
-			$map->setLastSync($e->getRetryAt());
+			// Cooldown instead of lastSync: lastSync keeps the last SUCCESSFUL
+			// run, cooldown_until keeps cron and webhooks from hammering GitHub.
+			$map->setCooldownUntil($e->getRetryAt());
 			$this->boardMaps->update($map);
 			return ['deck_to_github' => 0, 'github_to_deck' => 0, 'errors' => [$e->getMessage()], 'warnings' => $this->warnings, 'retryAt' => $e->getRetryAt()];
 		} finally {
@@ -78,6 +85,8 @@ class SyncService {
 		$userId = $map->getUserId();
 		$stats = ['deck_to_github' => 0, 'github_to_deck' => 0, 'errors' => [], 'warnings' => []];
 		$this->warnings = [];
+		$this->schemaChanged = false;
+		$this->hasEstablishedLinks = false;
 		try {
 			$this->deck->assertAvailable();
 		} catch (\Throwable $e) {
@@ -115,6 +124,15 @@ class SyncService {
 			$known['deck:' . $im->getDeckCardId()] = $im;
 			$known['gh:' . $im->getGithubItemId()] = $im;
 		}
+		// Links predating this run whose hashes were computed under a previous
+		// schema (adopted field IDs); only those need hash-skip bypasses.
+		$preexisting = array_fill_keys(array_keys($known), true);
+		foreach ($known as $link) {
+			if (($link->getDeckHash() ?? '') !== '' || ($link->getGithubHash() ?? '') !== '') {
+				$this->hasEstablishedLinks = true;
+				break;
+			}
+		}
 		$incremental = $this->canSyncIncrementally($map, $deckCards, $known, $fieldMap, $allowToGithub);
 		$filter = $incremental ? 'updated:>@today-1d' : null;
 
@@ -143,6 +161,13 @@ class SyncService {
 			if ($allowToGithub) {
 				try {
 					$dateFields = $this->github->ensureDateFields($userId, $map->getGithubProjectId(), $startFieldId, $dateFieldId);
+					if ($dateFields['startDateFieldId'] !== $startFieldId || $dateFields['dateFieldId'] !== $dateFieldId) {
+						$map->setStartFieldId($dateFields['startDateFieldId']);
+						$map->setDateFieldId($dateFields['dateFieldId']);
+						if ($this->hasEstablishedLinks) {
+							$this->schemaChanged = true;
+						}
+					}
 					$startFieldId = $dateFields['startDateFieldId'];
 					$dateFieldId = $dateFields['dateFieldId'];
 				} catch (\Throwable $e) {
@@ -255,7 +280,8 @@ class SyncService {
 						continue;
 					}
 					$hash = $this->hashDeck($card);
-					if ($existing !== null && $existing->getDeckHash() === $hash && $hash !== '' && isset($githubItems[$existing->getGithubItemId()])
+					$staleSchema = $existing !== null && $this->schemaChanged && isset($preexisting[$key]) && ($existing->getDeckHash() ?? '') !== '';
+					if (!$staleSchema && $existing !== null && $existing->getDeckHash() === $hash && $hash !== '' && isset($githubItems[$existing->getGithubItemId()])
 						&& !($map->getGithubRepository() !== '' && ($githubItems[$existing->getGithubItemId()]['content']['__typename'] ?? '') === 'DraftIssue')) {
 						$unchangedItem = $githubItems[$existing->getGithubItemId()];
 						if ($this->fieldAllowed($fieldMap, 'comments', BoardMap::DIR_TO_GITHUB)
@@ -289,7 +315,7 @@ class SyncService {
 							continue; // PRs are read-only, never push
 						}
 						if ($existing->getSyncHash() === 'pending_draft') {
-							$this->pushDeckToGithub($map, $userId, $card, $gItem, $fieldMap, $statusFieldId, $options, $stackById, $dateFieldId, $userMap);
+							$this->pushDeckToGithub($map, $userId, $card, $gItem, $fieldMap, $statusFieldId, $options, $stackById, $dateFieldId, $userMap, $startFieldId);
 							$existing->setDeckHash($hash);
 							$existing->setGithubHash($this->hashGithub($gItem));
 							$existing->setSyncHash('');
@@ -298,14 +324,14 @@ class SyncService {
 							continue;
 						}
 						if ($allowToDeck && $allowToGithub && $this->newerSide($card, $gItem) === 'github') {
-							$patch = $this->pullGithubToDeck($map, $userId, $card, $gItem, $fieldMap, $stackByTitle, $dateFieldId, $userMap, $statusFieldId);
+							$patch = $this->pullGithubToDeck($map, $userId, $card, $gItem, $fieldMap, $stackByTitle, $dateFieldId, $userMap, $statusFieldId, $startFieldId);
 							$existing->setGithubHash($this->hashGithub($gItem));
 							$existing->setDeckHash($this->hashDeck(array_merge($card, $patch)));
 							$this->itemMaps->update($existing);
 							$stats['github_to_deck']++;
 							continue;
 						}
-						$this->pushDeckToGithub($map, $userId, $card, $gItem, $fieldMap, $statusFieldId, $options, $stackById, $dateFieldId, $userMap);
+						$this->pushDeckToGithub($map, $userId, $card, $gItem, $fieldMap, $statusFieldId, $options, $stackById, $dateFieldId, $userMap, $startFieldId);
 						$existing->setDeckHash($hash);
 						$this->itemMaps->update($existing);
 					} else {
@@ -338,7 +364,7 @@ class SyncService {
 							$im->setGithubContentId($issueItem['content']['id'] ?? '');
 							$im->setContentType('Issue');
 							$this->itemMaps->update($im);
-							$this->pushDeckToGithub($map, $userId, $card, $issueItem, $fieldMap, $statusFieldId, $options, $stackById, $dateFieldId, $userMap);
+							$this->pushDeckToGithub($map, $userId, $card, $issueItem, $fieldMap, $statusFieldId, $options, $stackById, $dateFieldId, $userMap, $startFieldId);
 							$im->setDeckHash($hash);
 							$im->setSyncHash('');
 							$this->itemMaps->update($im);
@@ -388,7 +414,8 @@ class SyncService {
 						if ($card === null) {
 							continue;
 						}
-						if ($this->hashGithub($item) === $link->getGithubHash() && $link->getGithubHash() !== '') {
+						$staleSchema = $this->schemaChanged && isset($preexisting['gh:' . $itemId]) && ($link->getGithubHash() ?? '') !== '';
+						if (!$staleSchema && $this->hashGithub($item) === $link->getGithubHash() && $link->getGithubHash() !== '') {
 							if ($this->fieldAllowed($fieldMap, 'comments', BoardMap::DIR_TO_DECK)
 								&& ($item['content']['__typename'] ?? '') === 'Issue') {
 								$this->pullMissingComments($userId, (int)$card['id'], $item);
@@ -401,7 +428,7 @@ class SyncService {
 							$this->itemMaps->update($link);
 							continue;
 						}
-						$patch = $this->pullGithubToDeck($map, $userId, $card, $item, $fieldMap, $stackByTitle, $dateFieldId, $userMap, $statusFieldId);
+						$patch = $this->pullGithubToDeck($map, $userId, $card, $item, $fieldMap, $stackByTitle, $dateFieldId, $userMap, $statusFieldId, $startFieldId);
 						$link->setGithubHash($this->hashGithub($item));
 						if ($patch !== []) {
 							$link->setDeckHash($this->hashDeck(array_merge($card, $patch)));
@@ -476,6 +503,7 @@ class SyncService {
 		if ($stats['errors'] === []) {
 			$this->saveCommentHashes($links, $deckCards, $fieldMap, $allowToGithub);
 			$map->setLastSync(time());
+			$map->setCooldownUntil(0);
 		}
 		$stats['warnings'] = $this->warnings;
 		$this->boardMaps->update($map);
@@ -566,7 +594,7 @@ class SyncService {
 		}
 	}
 
-	private function pushDeckToGithub(BoardMap $map, string $userId, array $card, array $gItem, array $fieldMap, string $statusFieldId, array $options, array $stackById = [], string $dateFieldId = '', array $userMap = []): void {
+	private function pushDeckToGithub(BoardMap $map, string $userId, array $card, array $gItem, array $fieldMap, string $statusFieldId, array $options, array $stackById = [], string $dateFieldId = '', array $userMap = [], string $startFieldId = ''): void {
 		$content = $gItem['content'] ?? [];
 		$type = $content['__typename'] ?? 'DraftIssue';
 		if ($type === 'PullRequest') {
@@ -636,7 +664,7 @@ class SyncService {
 				$this->github->setDate($userId, $map->getGithubProjectId(), $gItem['id'], $dateFieldId, $deckDue);
 			}
 		}
-		$startFieldId = (string)($map->getStartFieldId() ?? '');
+		$startFieldId = $startFieldId !== '' ? $startFieldId : (string)($map->getStartFieldId() ?? '');
 		if ($this->fieldAllowed($fieldMap, 'start', BoardMap::DIR_TO_GITHUB) && $startFieldId !== '') {
 			$deckStart = DeckService::normalizeDue($card['startdate'] ?? null);
 			$ghStart = GithubProjectService::dateOf($gItem, $startFieldId);
@@ -697,7 +725,7 @@ class SyncService {
 		return null;
 	}
 
-	private function pullGithubToDeck(BoardMap $map, string $userId, array $card, array $gItem, array $fieldMap, array $stackByTitle, string $dateFieldId = '', array $userMap = [], string $statusFieldId = ''): array {
+	private function pullGithubToDeck(BoardMap $map, string $userId, array $card, array $gItem, array $fieldMap, array $stackByTitle, string $dateFieldId = '', array $userMap = [], string $statusFieldId = '', string $startFieldId = ''): array {
 		$content = $gItem['content'] ?? [];
 		$patch = [];
 		if ($this->fieldAllowed($fieldMap, 'title', BoardMap::DIR_TO_DECK) && isset($content['title']) && $content['title'] !== $card['title']) {
@@ -717,7 +745,7 @@ class SyncService {
 				$patch['duedate'] = $ghDue;
 			}
 		}
-		$startFieldId = (string)($map->getStartFieldId() ?? '');
+		$startFieldId = $startFieldId !== '' ? $startFieldId : (string)($map->getStartFieldId() ?? '');
 		if ($this->fieldAllowed($fieldMap, 'start', BoardMap::DIR_TO_DECK) && $startFieldId !== '') {
 			$ghStart = GithubProjectService::dateOf($gItem, $startFieldId);
 			$deckStart = DeckService::normalizeDue($card['startdate'] ?? null);
@@ -823,6 +851,9 @@ class SyncService {
 		if ($stored !== '' && $detected !== '' && $stored !== $detected && !isset($knownIds[$stored])) {
 			$this->logger->info('deckgithubsync: adopting recreated field ID', ['field' => $which]);
 			$this->setMapFieldId($map, $which, $detected);
+			if ($this->hasEstablishedLinks) {
+				$this->schemaChanged = true;
+			}
 			return $detected;
 		}
 		return $stored !== '' ? $stored : $detected;

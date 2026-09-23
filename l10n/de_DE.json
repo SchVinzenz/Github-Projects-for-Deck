@@ -140,7 +140,8 @@
     "Linked GitHub item is missing from the project; Deck card %s was skipped.": "Verknüpftes GitHub-Item fehlt in der Projektliste; Deck-Karte %s wurde übersprungen.",
     "Issue repository": "Issue-Repository",
     "Not found": "Nicht gefunden",
-    "Invalid direction": "Ungültige Richtung"
+    "Invalid direction": "Ungültige Richtung",
+    "GitHub rate limit – retry after": "GitHub-Limit – erneuter Versuch ab"
   },
   "pluralForm": "nplurals=2; plural=(n != 1);"
 }

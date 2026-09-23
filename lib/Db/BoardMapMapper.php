@@ -37,10 +37,15 @@ class BoardMapMapper extends QBMapper {
 	}
 
 	/** @return BoardMap[] */
-	public function findAllDue(int $olderThan): array {
+	public function findAllDue(int $olderThan, ?int $now = null): array {
+		$now ??= time();
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')->from($this->getTableName())
-			->where($qb->expr()->lt('last_sync', $qb->createNamedParameter($olderThan, IQueryBuilder::PARAM_INT)));
+			->where($qb->expr()->lt('last_sync', $qb->createNamedParameter($olderThan, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->orX(
+				$qb->expr()->isNull('cooldown_until'),
+				$qb->expr()->lte('cooldown_until', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+			));
 		return $this->findEntities($qb);
 	}
 

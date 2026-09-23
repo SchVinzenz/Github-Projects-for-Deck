@@ -36,6 +36,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setStartFieldId(string $v)
  * @method int getLastSync()
  * @method void setLastSync(int $v)
+ * @method int getCooldownUntil()
+ * @method void setCooldownUntil(int $v)
  */
 class BoardMap extends Entity {
 	public const DIR_BOTH = 'both';
@@ -54,6 +56,7 @@ class BoardMap extends Entity {
 	protected $dateFieldId = '';
 	protected $startFieldId = '';
 	protected $lastSync = 0;
+	protected $cooldownUntil = 0;
 
 	public function __construct() {
 		$this->addType('userId', 'string');
@@ -68,6 +71,7 @@ class BoardMap extends Entity {
 		$this->addType('dateFieldId', 'string');
 		$this->addType('startFieldId', 'string');
 		$this->addType('lastSync', 'integer');
+		$this->addType('cooldownUntil', 'integer');
 	}
 
 	/** Nullable DB columns are normalized to '' so callers can use strict comparisons. */
@@ -85,6 +89,10 @@ class BoardMap extends Entity {
 
 	public function getStartFieldId(): string {
 		return (string)($this->startFieldId ?? '');
+	}
+
+	public function getCooldownUntil(): int {
+		return (int)($this->cooldownUntil ?? 0);
 	}
 
 	/** @return array<string,string> field => direction */

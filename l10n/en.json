@@ -140,7 +140,8 @@
     "Linked GitHub item is missing from the project; Deck card %s was skipped.": "Linked GitHub item is missing from the project; Deck card %s was skipped.",
     "Issue repository": "Issue repository",
     "Not found": "Not found",
-    "Invalid direction": "Invalid direction"
+    "Invalid direction": "Invalid direction",
+    "GitHub rate limit – retry after": "GitHub rate limit – retry after"
   },
   "pluralForm": "nplurals=2; plural=(n != 1);"
 }

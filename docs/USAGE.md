@@ -18,7 +18,9 @@ Ja. Nach dem Anlegen eines Mappings musst du nichts weiter tun:
 
 Hinweis: Schlägt ein Sync mit Fehlern fehl, wird `lastSync` nicht
 aktualisiert – das Mapping bleibt fällig und wird beim nächsten Lauf erneut
-versucht.
+versucht. Bei GitHub-Rate-Limits gilt zusätzlich ein Cooldown
+(`Erneuter Versuch ab …` in der UI), damit Cron und Webhook das Limit nicht
+weiter belasten.
 
 ## Muss ein Issue-Repository angegeben werden?
 

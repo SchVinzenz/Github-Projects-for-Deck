@@ -316,6 +316,7 @@ class SettingsController extends Controller {
 			'dateFieldId' => $m->getDateFieldId(),
 			'userMap' => $users,
 			'lastSync' => $m->getLastSync(),
+			'cooldownUntil' => $m->getCooldownUntil(),
 		];
 	}
 

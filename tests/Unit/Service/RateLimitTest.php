@@ -55,7 +55,8 @@ class RateLimitTest extends TestCase {
 		$sync = new SyncService($maps, $this->createMock(ItemMapMapper::class), $this->createMock(UserMapMapper::class), $deck, $github,
 			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class));
 		$result = $sync->syncBoard($map);
-		$this->assertSame($retryAt, $map->getLastSync());
+		$this->assertSame(0, $map->getLastSync());
+		$this->assertSame($retryAt, $map->getCooldownUntil());
 		$this->assertSame($retryAt, $result['retryAt']);
 	}
 }

@@ -23,7 +23,8 @@ Deck (Board/Stack/Card)  <--DeckService-->  SyncService  <--GithubProjectService
 
 - `deckghs_boardmap`: Board ↔ Project, optionales Issue-Repository, Richtung,
   Feldconfig (JSON), `status_field_id`, `date_field_id`, `start_field_id`,
-  `last_sync` (wird nur bei fehlerfreien Läufen gesetzt)
+  `last_sync` (nur letzter **erfolgreicher** Lauf), `cooldown_until`
+  (Rate-Limit-Sperre, schließt Mappings vom Cron aus)
 - `deckghs_itemmap`: Card ↔ Project-Item, Content-Typ, Deck-Hash + GitHub-Hash (getrennt, für idempotente Syncs)
 - `deckghs_usermap`: GitHub-Login ↔ Deck-Benutzer (pro Mapping, für Assignees)
 
