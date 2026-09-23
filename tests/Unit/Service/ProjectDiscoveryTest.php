@@ -57,6 +57,7 @@ class ProjectDiscoveryTest extends TestCase {
 		$client->expects($this->once())->method('graphql')->willReturnCallback(static function (string $uid, string $query, array $vars): array {
 			self::assertStringContainsString('convertProjectV2DraftIssueItemToIssue', $query);
 			self::assertStringContainsString('__typename', $query);
+			self::assertSame(substr_count($query, '{'), substr_count($query, '}'), 'GraphQL mutation must close every selection set');
 			self::assertSame(['project' => 'P1', 'item' => 'I1', 'repo' => 'R1'], $vars);
 			return ['data' => ['convertProjectV2DraftIssueItemToIssue' => ['item' => [
 				'id' => 'I1', 'content' => ['__typename' => 'Issue', 'number' => 7],
