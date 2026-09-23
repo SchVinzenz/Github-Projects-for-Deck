@@ -16,6 +16,7 @@ use OCA\DeckGithubSync\Db\ItemMapMapper;
 use OCA\DeckGithubSync\Db\UserMapMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IUserManager;
+use OCP\IL10N;
 use OCP\IUserSession;
 use Psr\Log\LoggerInterface;
 
@@ -34,6 +35,7 @@ class SyncService {
 		private IUserManager $userManager,
 		private IUserSession $userSession,
 		private LoggerInterface $logger,
+		private IL10N $l,
 	) {
 	}
 
@@ -107,6 +109,14 @@ class SyncService {
 			$stackByTitle[strtolower($s['title'])] = $s['id'];
 			$stackById[$s['id']] = $s['title'];
 		}
+		$links = $this->itemMaps->findByMap($map->getId());
+		$known = [];
+		foreach ($links as $im) {
+			$known['deck:' . $im->getDeckCardId()] = $im;
+			$known['gh:' . $im->getGithubItemId()] = $im;
+		}
+		$incremental = $this->canSyncIncrementally($map, $deckCards, $known, $fieldMap, $allowToGithub);
+		$filter = $incremental ? 'updated:>@today-1d' : null;
 
 		$options = [];
 		$statusFieldId = '';
@@ -139,7 +149,7 @@ class SyncService {
 					if ($e instanceof GithubRateLimitException) {
 						throw $e;
 					}
-					$this->warnings[] = 'Datum-Felder: ' . $e->getMessage();
+					$this->warnings[] = $this->l->t('Date fields: %s', [$e->getMessage()]);
 					$this->logger->warning('deckgithubsync: ensureDateFields failed', ['exception' => $e]);
 				}
 			}
@@ -152,7 +162,7 @@ class SyncService {
 						if ($e instanceof GithubRateLimitException) {
 							throw $e;
 						}
-						$this->warnings[] = 'Status-Optionen: ' . $e->getMessage();
+						$this->warnings[] = $this->l->t('Status options: %s', [$e->getMessage()]);
 						$this->logger->warning('deckgithubsync: ensureStatusOptions failed', ['exception' => $e]);
 					}
 				}
@@ -163,7 +173,7 @@ class SyncService {
 							try {
 								$id = $this->deck->createStack($userId, $map->getDeckBoardId(), $statusName, count($stacks) * 100);
 							} catch (\Throwable $e) {
-								$this->warnings[] = 'Stack anlegen: ' . $e->getMessage();
+								$this->warnings[] = $this->l->t('Create stack: %s', [$e->getMessage()]);
 								$this->logger->warning('deckgithubsync: createStack failed', ['exception' => $e]);
 								continue;
 							}
@@ -174,14 +184,14 @@ class SyncService {
 					}
 				}
 			} elseif ($allowToGithub) {
-				$this->warnings[] = 'GitHub Project hat kein Status-Feld; Stack-Sync ist deaktiviert.';
+				$this->warnings[] = $this->l->t('GitHub Project has no Status field; stack sync is disabled.');
 				$this->logger->warning('deckgithubsync: project has no Status field, stack sync disabled');
 			}
 			if ($stacks === [] && $allowToDeck) {
 				try {
 					$id = $this->deck->createStack($userId, $map->getDeckBoardId(), 'Todo', 0);
 				} catch (\Throwable $e) {
-					$this->warnings[] = 'Stack anlegen: ' . $e->getMessage();
+					$this->warnings[] = $this->l->t('Create stack: %s', [$e->getMessage()]);
 					$this->logger->warning('deckgithubsync: createStack failed', ['exception' => $e]);
 					$stats['warnings'] = $this->warnings;
 					return $stats;
@@ -193,7 +203,7 @@ class SyncService {
 
 			$after = null;
 			do {
-				$page = $this->github->listItems($userId, $map->getGithubProjectId(), $after);
+				$page = $this->github->listItems($userId, $map->getGithubProjectId(), $after, $filter);
 				foreach ($page['items'] as $it) {
 					$githubItems[$it['id']] = $it;
 				}
@@ -210,12 +220,7 @@ class SyncService {
 
 		$userMap = $this->loadUserMap($map->getId()); // githubLogin(lower) => deckUid + reverse
 
-		$known = [];
 		$skipGithubItems = [];
-		foreach ($this->itemMaps->findByMap($map->getId()) as $im) {
-			$known['deck:' . $im->getDeckCardId()] = $im;
-			$known['gh:' . $im->getGithubItemId()] = $im;
-		}
 
 		// Untracked titles for duplicate protection (fresh mappings, both sides)
 		$untrackedGhByTitle = [];
@@ -243,6 +248,12 @@ class SyncService {
 				try {
 					$key = 'deck:' . $card['id'];
 					$existing = $known[$key] ?? null;
+					if ($existing !== null && !isset($githubItems[$existing->getGithubItemId()])) {
+						if (!$incremental) {
+							$this->warnings[] = $this->l->t('Linked GitHub item is missing from the project; Deck card %s was skipped.', [$card['id']]);
+						}
+						continue;
+					}
 					$hash = $this->hashDeck($card);
 					if ($existing !== null && $existing->getDeckHash() === $hash && $hash !== '' && isset($githubItems[$existing->getGithubItemId()])
 						&& !($map->getGithubRepository() !== '' && ($githubItems[$existing->getGithubItemId()]['content']['__typename'] ?? '') === 'DraftIssue')) {
@@ -463,11 +474,55 @@ class SyncService {
 		}
 
 		if ($stats['errors'] === []) {
+			$this->saveCommentHashes($links, $deckCards, $fieldMap, $allowToGithub);
 			$map->setLastSync(time());
 		}
 		$stats['warnings'] = $this->warnings;
 		$this->boardMaps->update($map);
 		return $stats;
+	}
+
+	private function canSyncIncrementally(BoardMap $map, array $deckCards, array $known, array $fieldMap, bool $allowToGithub): bool {
+		$lastSync = $map->getLastSync();
+		if ($lastSync <= 0 || gmdate('Y-m-d', $lastSync) !== gmdate('Y-m-d')) {
+			return false;
+		}
+		foreach ($deckCards as $card) {
+			$link = $known['deck:' . $card['id']] ?? null;
+			if ($link === null || $link->getSyncHash() === 'pending_draft') {
+				return false;
+			}
+			if ($allowToGithub && $link->getDeckHash() !== $this->hashDeck($card)) {
+				return false;
+			}
+			if ($allowToGithub && $link->getContentType() === 'Issue'
+				&& $this->fieldAllowed($fieldMap, 'comments', BoardMap::DIR_TO_GITHUB)
+				&& $link->getSyncHash() !== $this->commentHash((int)$card['id'])) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	private function commentHash(int $cardId): string {
+		return 'comments:' . hash('sha256', json_encode($this->deck->getComments($cardId)) ?: '[]');
+	}
+
+	private function saveCommentHashes(array $links, array $deckCards, array $fieldMap, bool $allowToGithub): void {
+		if (!$allowToGithub || !$this->fieldAllowed($fieldMap, 'comments', BoardMap::DIR_TO_GITHUB)) {
+			return;
+		}
+		$cardIds = array_fill_keys(array_column($deckCards, 'id'), true);
+		foreach ($links as $link) {
+			if ($link->getContentType() !== 'Issue' || !isset($cardIds[$link->getDeckCardId()]) || $link->getSyncHash() === 'pending_draft') {
+				continue;
+			}
+			$hash = $this->commentHash($link->getDeckCardId());
+			if ($link->getSyncHash() !== $hash) {
+				$link->setSyncHash($hash);
+				$this->itemMaps->update($link);
+			}
+		}
 	}
 
 	private function normTitle(string $title): string {

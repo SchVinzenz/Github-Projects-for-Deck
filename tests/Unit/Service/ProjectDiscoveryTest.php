@@ -10,6 +10,17 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
 class ProjectDiscoveryTest extends TestCase {
+	public function testItemListingPassesIncrementalFilterToGraphql(): void {
+		$client = $this->createMock(GithubClientService::class);
+		$client->expects($this->once())->method('graphql')->with(
+			'alice',
+			$this->callback(static fn (string $query): bool => str_contains($query, 'query:$filter')),
+			['pid' => 'P1', 'after' => null, 'filter' => 'updated:>@today-1d'],
+		)->willReturn(['data' => ['node' => ['items' => ['nodes' => [], 'pageInfo' => ['hasNextPage' => false, 'endCursor' => null]]]]]);
+		$service = new GithubProjectService($client, $this->createMock(LoggerInterface::class));
+		$this->assertSame([], $service->listItems('alice', 'P1', null, 'updated:>@today-1d')['items']);
+	}
+
 	public function testAddsMissingStackStatusWithoutReplacingExistingOption(): void {
 		$client = $this->createMock(GithubClientService::class);
 		$client->expects($this->once())->method('graphql')->willReturnCallback(static function (string $uid, string $query, array $variables): array {

@@ -254,9 +254,9 @@ class GithubProjectService {
 	}
 
 	/** @return array{items: array, hasNext: bool, cursor: ?string} */
-	public function listItems(string $userId, string $projectId, ?string $after = null): array {
-		$q = 'query($pid:ID!,$after:String){ node(id:$pid){ ... on ProjectV2{
-			items(first:50, after:$after){ pageInfo{ hasNextPage endCursor }
+	public function listItems(string $userId, string $projectId, ?string $after = null, ?string $filter = null): array {
+		$q = 'query($pid:ID!,$after:String,$filter:String){ node(id:$pid){ ... on ProjectV2{
+			items(first:50, after:$after, query:$filter){ pageInfo{ hasNextPage endCursor }
 			nodes{ id updatedAt
 				content{ __typename
 					... on DraftIssue{ id title body updatedAt }
@@ -269,7 +269,7 @@ class GithubProjectService {
 					... on ProjectV2ItemFieldDateValue{ date field{ ... on ProjectV2FieldCommon{ id name } } }
 				} }
 			} } } } }';
-		$res = $this->client->graphql($userId, $q, ['pid' => $projectId, 'after' => $after]);
+		$res = $this->client->graphql($userId, $q, ['pid' => $projectId, 'after' => $after, 'filter' => $filter ?? '']);
 		if (($res['data']['node'] ?? null) === null) {
 			$msg = isset($res['errors']) ? (string)json_encode($res['errors']) : 'empty response';
 			throw new \RuntimeException('GitHub project query failed: ' . substr($msg, 0, 300));

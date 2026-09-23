@@ -9,6 +9,7 @@ use OCP\Http\Client\IClient;
 use OCP\Http\Client\IClientService;
 use OCP\Http\Client\IResponse;
 use OCP\IConfig;
+use OCP\IL10N;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
@@ -117,12 +118,14 @@ class TokenValidationTest extends TestCase {
 		$result = $this->service($client)->inspectUserToken('secret');
 		$this->assertNull($result['login']);
 		$this->assertSame(401, $result['status']);
-		$this->assertStringContainsString('abgelehnt', $result['error']);
+		$this->assertStringContainsString('rejected', $result['error']);
 	}
 
 	private function service(IClient $client, ?IConfig $config = null): GithubClientService {
 		$clients = $this->createMock(IClientService::class);
 		$clients->method('newClient')->willReturn($client);
-		return new GithubClientService($clients, $config ?? $this->createMock(IConfig::class), $this->createMock(LoggerInterface::class));
+		$l = $this->createMock(IL10N::class);
+		$l->method('t')->willReturnCallback(static fn (string $source): string => $source);
+		return new GithubClientService($clients, $config ?? $this->createMock(IConfig::class), $this->createMock(LoggerInterface::class), $l);
 	}
 }

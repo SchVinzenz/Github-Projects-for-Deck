@@ -15,6 +15,7 @@ use OCA\DeckGithubSync\Service\GithubRateLimitException;
 use OCA\DeckGithubSync\Service\SyncService;
 use OCP\Http\Client\IClientService;
 use OCP\IConfig;
+use OCP\IL10N;
 use OCP\IUserManager;
 use OCP\IUserSession;
 use PHPUnit\Framework\TestCase;
@@ -22,7 +23,7 @@ use Psr\Log\LoggerInterface;
 
 class RateLimitTest extends TestCase {
 	public function testRetryAfterTakesPrecedenceOverReset(): void {
-		$client = new GithubClientService($this->createMock(IClientService::class), $this->createMock(IConfig::class), $this->createMock(LoggerInterface::class));
+		$client = new GithubClientService($this->createMock(IClientService::class), $this->createMock(IConfig::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class));
 		$response = new class {
 			public function getHeader(string $name): string {
 				return match ($name) {
@@ -52,7 +53,7 @@ class RateLimitTest extends TestCase {
 		$github = $this->createMock(GithubProjectService::class);
 		$github->method('getFields')->willThrowException(new GithubRateLimitException($retryAt));
 		$sync = new SyncService($maps, $this->createMock(ItemMapMapper::class), $this->createMock(UserMapMapper::class), $deck, $github,
-			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class));
+			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class));
 		$result = $sync->syncBoard($map);
 		$this->assertSame($retryAt, $map->getLastSync());
 		$this->assertSame($retryAt, $result['retryAt']);

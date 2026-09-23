@@ -6,139 +6,139 @@
 		<section class="deckghs-card">
 			<div class="deckghs-connection-header">
 				<div>
-					<h2><span class="deckghs-step" aria-hidden="true">1</span>GitHub verbinden</h2>
-					<p class="deckghs-muted">Verbinde dein persönliches GitHub-Konto für die Project-Synchronisation.</p>
+					<h2><span class="deckghs-step" aria-hidden="true">1</span>{{ tr("Connect GitHub") }}</h2>
+					<p class="deckghs-muted">{{ tr("Connect your personal GitHub account to sync projects.") }}</p>
 				</div>
 				<span v-if="!loading" class="deckghs-status" :class="status.connected ? 'connected' : 'disconnected'">
-					<span class="deckghs-dot" />{{ status.connected ? 'Verbunden' : 'Nicht verbunden' }}
+					<span class="deckghs-dot" />{{ status.connected ? tr('Connected') : tr('Not connected') }}
 				</span>
 			</div>
-			<div v-if="loading" class="deckghs-muted">Wird geladen …</div>
+			<div v-if="loading" class="deckghs-muted">{{ tr("Loading …") }}</div>
 			<div v-else class="deckghs-conn">
 				<div class="deckghs-conn-text">
-					<strong v-if="status.connected">GitHub-Konto: {{ status.login }}</strong>
-					<strong v-else>Dein GitHub-Konto ist noch nicht verbunden.</strong>
+					<strong v-if="status.connected">{{ tr("GitHub account:") }} {{ status.login }}</strong>
+					<strong v-else>{{ tr("Your GitHub account is not connected yet.") }}</strong>
 					<p class="deckghs-muted">
-						<span v-if="status.connected">Projects werden mit diesem Konto abgerufen und synchronisiert.</span>
-						<span v-else>{{ status.reason || 'Verbinde dein GitHub-Konto, damit Boards synchronisiert werden können.' }}</span>
+						<span v-if="status.connected">{{ tr("Projects are fetched and synced with this account.") }}</span>
+						<span v-else>{{ status.reason || tr('Connect your GitHub account to sync boards.') }}</span>
 					</p>
 				</div>
 				<div class="deckghs-actions">
-					<a v-if="!status.connected && status.oauth" class="deckghs-btn primary" :href="apiUrl('/oauth/start')">Mit GitHub verbinden →</a>
-					<button v-if="status.connected" class="deckghs-btn" :disabled="checkingConnection" @click="refreshConnection">{{ checkingConnection ? 'Prüfe …' : 'Verbindung prüfen' }}</button>
-					<button v-if="status.connected" class="deckghs-btn" @click="disconnect">Trennen</button>
+					<a v-if="!status.connected && status.oauth" class="deckghs-btn primary" :href="apiUrl('/oauth/start')">{{ tr("Connect with GitHub →") }}</a>
+					<button v-if="status.connected" class="deckghs-btn" :disabled="checkingConnection" @click="refreshConnection">{{ checkingConnection ? tr('Checking …') : tr('Check connection') }}</button>
+					<button v-if="status.connected" class="deckghs-btn" @click="disconnect">{{ tr("Disconnect") }}</button>
 				</div>
 			</div>
-			<p v-if="!loading && !status.connected && !status.oauth" class="deckghs-muted">Für die Anmeldung per Klick muss ein Admin einmalig eine GitHub OAuth App einrichten.</p>
+			<p v-if="!loading && !status.connected && !status.oauth" class="deckghs-muted">{{ tr("An administrator must set up a GitHub OAuth app to enable one-click sign-in.") }}</p>
 			<details v-if="!status.connected" class="deckghs-pat">
-				<summary>Alternativ: Personal Access Token eintragen</summary>
-				<p class="deckghs-muted">Fine-grained Token mit <code>Projects: Read &amp; Write</code> und <code>Issues: Read &amp; Write</code>.</p>
+				<summary>{{ tr("Alternatively: enter a personal access token") }}</summary>
+				<p class="deckghs-muted">{{ tr("Fine-grained token with") }} <code>Projects: Read &amp; Write</code> {{ tr("and") }} <code>Issues: Read &amp; Write</code>.</p>
 				<div class="deckghs-row">
-					<label>GitHub-Token <input v-model="pat" type="password" placeholder="github_pat_…" autocomplete="off" /></label>
-					<button class="deckghs-btn primary" :disabled="!pat || savingPat" @click="savePat">{{ savingPat ? 'Prüfe …' : 'Token speichern' }}</button>
+					<label>{{ tr("GitHub token") }} <input v-model="pat" type="password" placeholder="github_pat_…" autocomplete="off" /></label>
+					<button class="deckghs-btn primary" :disabled="!pat || savingPat" @click="savePat">{{ savingPat ? tr('Checking …') : tr('Save token') }}</button>
 				</div>
 			</details>
 		</section>
 
 		<section class="deckghs-card">
-			<h2><span class="deckghs-step" aria-hidden="true">2</span>Board-Mappings</h2>
-			<p v-if="!loading && !status.connected" class="deckghs-note deckghs-note-warn">Tipp: Verbinde zuerst oben dein GitHub-Konto – sonst schlägt das Anlegen fehl.</p>
-			<p v-if="!mappings.length" class="deckghs-muted">Noch keine Mappings. Lege unten dein erstes an.</p>
+			<h2><span class="deckghs-step" aria-hidden="true">2</span>{{ tr("Board mappings") }}</h2>
+			<p v-if="!loading && !status.connected" class="deckghs-note deckghs-note-warn">{{ tr("Connect your GitHub account above before creating a mapping.") }}</p>
+			<p v-if="!mappings.length" class="deckghs-muted">{{ tr("No mappings yet. Create your first one below.") }}</p>
 			<article v-for="m in mappings" :key="m.id" class="deckghs-map">
 				<header>
 					<strong class="deckghs-map-title">{{ boardTitle(m.deckBoardId) }} <span class="deckghs-muted">↔ {{ m.githubOwner }}#{{ m.githubNumber }}</span></strong>
 					<span class="deckghs-pill">{{ dirLabel(m.direction) }}</span>
 				</header>
-				<p class="deckghs-meta deckghs-muted">Sync: {{ m.lastSync ? new Date(m.lastSync * 1000).toLocaleString() : 'noch nie' }}</p>
+				<p class="deckghs-meta deckghs-muted">Sync: {{ m.lastSync ? new Date(m.lastSync * 1000).toLocaleString() : tr('never') }}</p>
 				<div class="deckghs-row">
-					<label>Richtung
+					<label>{{ tr("Direction") }}
 						<select v-model="m.direction" @change="update(m)">
-							<option value="both">Bidirektional</option>
+							<option value="both">{{ tr("Bidirectional") }}</option>
 							<option value="deck_to_github">Deck → GitHub</option>
 							<option value="github_to_deck">GitHub → Deck</option>
 						</select>
 					</label>
-					<label>Issue-Repository
-						<input v-model.trim="m.githubRepository" list="deckghs-repositories" placeholder="leer = Draft" @change="update(m)" />
+					<label>{{ tr('Issue repository') }}
+						<input v-model.trim="m.githubRepository" list="deckghs-repositories" :placeholder="tr('empty = draft')" @change="update(m)" />
 					</label>
-					<span class="deckghs-muted">Ein Repository wandelt verknüpfte Drafts beim nächsten Sync in Issues um.</span>
+					<span class="deckghs-muted">{{ tr("A repository converts linked drafts to issues on the next sync.") }}</span>
 					<span class="deckghs-spacer" />
-					<button class="deckghs-btn primary" :disabled="syncing[m.id]" @click="sync(m)">{{ syncing[m.id] ? 'Läuft …' : 'Jetzt syncen' }}</button>
-					<button class="deckghs-btn danger" @click="remove(m)">Löschen</button>
+					<button class="deckghs-btn primary" :disabled="syncing[m.id]" @click="sync(m)">{{ syncing[m.id] ? tr('Syncing …') : tr('Sync now') }}</button>
+					<button class="deckghs-btn danger" @click="remove(m)">{{ tr("Delete") }}</button>
 				</div>
-				<p v-if="results[m.id]" :class="results[m.id].includes('Fehler') ? 'deckghs-note deckghs-note-err' : 'deckghs-note deckghs-note-ok'">{{ results[m.id] }}</p>
+				<p v-if="results[m.id]" :class="resultErrors[m.id] ? 'deckghs-note deckghs-note-err' : 'deckghs-note deckghs-note-ok'">{{ results[m.id] }}</p>
 				<details @toggle="loadDateFields(m, $event)">
-					<summary>Felder &amp; Nutzer</summary>
-					<label>GitHub-Feld für Fälligkeit
+					<summary>{{ tr("Fields & users") }}</summary>
+					<label>{{ tr("GitHub due date field") }}
 						<select v-model="m.dateFieldId" @change="update(m)">
-							<option value="">Automatisch erkennen</option>
+							<option value="">{{ tr("Detect automatically") }}</option>
 							<option v-for="f in dateFields[m.id] || []" :key="f.id" :value="f.id">{{ f.name }}</option>
 						</select>
 					</label>
 					<div class="deckghs-fields">
 						<label v-for="f in Object.keys(m.fieldConfig)" :key="f">{{ f }}
 							<select v-model="m.fieldConfig[f]" @change="update(m)">
-								<option value="both">↔ beidseitig</option>
-								<option value="deck_to_github">→ nur Deck zu GitHub</option>
-								<option value="github_to_deck">← nur GitHub zu Deck</option>
-								<option value="off">aus</option>
+								<option value="both">{{ tr("↔ both ways") }}</option>
+								<option value="deck_to_github">{{ tr("→ Deck to GitHub only") }}</option>
+								<option value="github_to_deck">{{ tr("← GitHub to Deck only") }}</option>
+								<option value="off">{{ tr("off") }}</option>
 							</select>
 						</label>
 					</div>
-					<p class="deckghs-muted">Deck-Anhänge werden nicht synchronisiert. Dateien bleiben nur in Nextcloud verfügbar.</p>
+					<p class="deckghs-muted">{{ tr("Deck attachments are not synced. Files remain available only in Nextcloud.") }}</p>
 					<div class="deckghs-users">
-						<p class="deckghs-muted">GitHub-Login → Deck-Benutzer (für Assignees)</p>
+						<p class="deckghs-muted">{{ tr("GitHub login → Deck user (for assignees)") }}</p>
 						<div v-for="(u, i) in m.userMap" :key="i" class="deckghs-row">
-							<input v-model="u.githubLogin" placeholder="GitHub-Login" />
-							<input v-model="u.deckUid" placeholder="Deck-Benutzer" />
+							<input v-model="u.githubLogin" :placeholder="tr('GitHub login')" />
+							<input v-model="u.deckUid" :placeholder="tr('Deck user')" />
 							<button class="deckghs-btn" @click="m.userMap.splice(i, 1); saveUsers(m)">✕</button>
 						</div>
-						<button class="deckghs-btn" @click="m.userMap.push({ githubLogin: '', deckUid: '' })">Zeile hinzufügen</button>
-						<button class="deckghs-btn primary" @click="saveUsers(m)">Nutzer-Mapping speichern</button>
+						<button class="deckghs-btn" @click="m.userMap.push({ githubLogin: '', deckUid: '' })">{{ tr("Add row") }}</button>
+						<button class="deckghs-btn primary" @click="saveUsers(m)">{{ tr("Save user mapping") }}</button>
 					</div>
 				</details>
 			</article>
 		</section>
 
 		<section class="deckghs-card">
-			<h2><span class="deckghs-step" aria-hidden="true">3</span>Neues Mapping</h2>
-			<p class="deckghs-muted">Wähle ein Deck-Board und ein GitHub Project. GitHub-Repositories sind keine Project-Mappings.</p>
-			<p class="deckghs-muted">Wähle ein Issue-Repository, damit Karten als GitHub Issues entstehen. Bereits verknüpfte Drafts werden beim nächsten Sync umgewandelt. Ohne Repository bleiben es Project-Drafts.</p>
+			<h2><span class="deckghs-step" aria-hidden="true">3</span>{{ tr("New mapping") }}</h2>
+			<p class="deckghs-muted">{{ tr("Choose a Deck board and a GitHub Project. GitHub repositories are not project mappings.") }}</p>
+			<p class="deckghs-muted">{{ tr("Choose an issue repository to create GitHub issues from cards. Existing linked drafts are converted on the next sync. Without a repository they remain project drafts.") }}</p>
 			<div class="deckghs-row">
-				<label>Deck-Board
+				<label>{{ tr("Deck board") }}
 					<select v-model.number="form.deckBoardId">
-						<option :value="0" disabled>Bitte wählen …</option>
+						<option :value="0" disabled>{{ tr("Select …") }}</option>
 						<option v-for="b in boards" :key="b.id" :value="b.id">{{ b.title }}</option>
 					</select>
 				</label>
 				<label v-if="projectMode === 'select'">GitHub Project
 					<select v-model="selectedProjectId" :disabled="projectsLoading || !status.connected">
-						<option value="" disabled>{{ projectsLoading ? 'Lade Projects …' : 'Bitte wählen …' }}</option>
+						<option value="" disabled>{{ projectsLoading ? tr('Loading projects …') : tr('Select …') }}</option>
 						<option v-for="p in projects" :key="p.id" :value="p.id">{{ p.owner }} / {{ p.title }} (#{{ p.number }})</option>
 					</select>
 				</label>
 				<template v-else>
-					<label>Owner <input v-model="form.githubOwner" placeholder="z. B. meine-org" /></label>
-					<label>Project-Nr. <input v-model.number="form.githubNumber" type="number" min="1" /></label>
+					<label>Owner <input v-model="form.githubOwner" :placeholder="tr('e.g. my-org')" /></label>
+					<label>{{ tr("Project number") }} <input v-model.number="form.githubNumber" type="number" min="1" /></label>
 				</template>
-				<label>Richtung
+				<label>{{ tr("Direction") }}
 					<select v-model="form.direction">
-						<option value="both">Bidirektional</option>
+						<option value="both">{{ tr("Bidirectional") }}</option>
 						<option value="deck_to_github">Deck → GitHub</option>
 						<option value="github_to_deck">GitHub → Deck</option>
 					</select>
 				</label>
-				<label>Issue-Repository
-					<input v-model.trim="form.githubRepository" list="deckghs-repositories" placeholder="owner/repository (leer = Draft)" />
+				<label>{{ tr('Issue repository') }}
+					<input v-model.trim="form.githubRepository" list="deckghs-repositories" :placeholder="tr('owner/repository (empty = draft)')" />
 				</label>
 				<datalist id="deckghs-repositories"><option v-for="repo in repositories" :key="repo" :value="repo" /></datalist>
-				<button class="deckghs-btn primary" :disabled="!canCreate || creating" @click="create">{{ creating ? 'Legt an …' : 'Anlegen' }}</button>
+				<button class="deckghs-btn primary" :disabled="!canCreate || creating" @click="create">{{ creating ? tr('Creating …') : tr('Create') }}</button>
 			</div>
 			<p v-if="projectError" class="deckghs-note deckghs-note-warn">{{ projectError }}</p>
 			<p v-if="repositoryError" class="deckghs-note deckghs-note-warn">{{ repositoryError }}</p>
 			<div class="deckghs-row">
-				<button v-if="projectMode === 'select' && status.connected" class="deckghs-btn" :disabled="projectsLoading" @click="loadProjects">Projects aktualisieren</button>
-				<button class="deckghs-btn" @click="projectMode = projectMode === 'select' ? 'manual' : 'select'">{{ projectMode === 'select' ? 'Project manuell eingeben' : 'Zur Project-Auswahl' }}</button>
+				<button v-if="projectMode === 'select' && status.connected" class="deckghs-btn" :disabled="projectsLoading" @click="loadProjects">{{ tr("Refresh projects") }}</button>
+				<button class="deckghs-btn" @click="projectMode = projectMode === 'select' ? 'manual' : 'select'">{{ projectMode === 'select' ? tr('Enter project manually') : tr('Back to project selection') }}</button>
 			</div>
 		</section>
 	</div>
@@ -147,17 +147,18 @@
 <script>
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
+import { tr } from '../l10n.js'
 
-const DIRS = { both: 'Bidirektional', deck_to_github: 'Deck → GitHub', github_to_deck: 'GitHub → Deck' }
+const DIRS = { both: 'Bidirectional', deck_to_github: 'Deck → GitHub', github_to_deck: 'GitHub → Deck' }
 const OAUTH_ERRORS = {
-	no_oauth_app: 'GitHub OAuth ist noch nicht vollständig eingerichtet. Client ID und Client Secret in den Admin-Einstellungen prüfen.',
-	invalid_state: 'Die Anmeldung konnte deiner Nextcloud-Sitzung nicht zugeordnet werden. Bitte erneut starten und Cookies zulassen.',
-	exchange_failed: 'GitHub konnte den Anmeldecode nicht einlösen. Client ID, Client Secret und Callback-URL prüfen.',
-	incorrect_client_credentials: 'Client ID oder Client Secret der GitHub OAuth App sind falsch. Bitte den Admin informieren.',
-	redirect_uri_mismatch: 'Die GitHub-Callback-URL stimmt nicht mit der URL in den Admin-Einstellungen überein.',
-	bad_verification_code: 'Der GitHub-Anmeldecode ist abgelaufen oder ungültig. Bitte erneut verbinden.',
-	unverified_user_email: 'Bitte zuerst die primäre E-Mail-Adresse deines GitHub-Kontos bestätigen.',
-	access_denied: 'Die GitHub-Anmeldung wurde abgebrochen.',
+	no_oauth_app: 'GitHub OAuth is not fully configured. Check the client ID and secret in admin settings.',
+	invalid_state: 'Sign-in could not be linked to your Nextcloud session. Try again and allow cookies.',
+	exchange_failed: 'GitHub could not exchange the authorization code. Check the client ID, secret and callback URL.',
+	incorrect_client_credentials: 'The GitHub OAuth app client ID or secret is incorrect. Contact an administrator.',
+	redirect_uri_mismatch: 'The GitHub callback URL does not match the URL in admin settings.',
+	bad_verification_code: 'The GitHub authorization code has expired or is invalid. Connect again.',
+	unverified_user_email: 'Verify your primary GitHub email address first.',
+	access_denied: 'GitHub sign-in was cancelled.',
 }
 const apiUrl = (path) => generateUrl('/apps/deckgithubsync' + path)
 
@@ -180,6 +181,7 @@ export default {
 			pat: '',
 			form: { deckBoardId: 0, githubOwner: '', githubNumber: null, direction: 'both', githubRepository: '' },
 			results: {},
+			resultErrors: {},
 			syncing: {},
 			checkingConnection: false,
 			savingPat: false,
@@ -199,7 +201,7 @@ export default {
 		const q = new URLSearchParams(window.location.search)
 		const returnedFromOAuth = q.get('gh_connected') === '1'
 		if (q.get('gh_error')) {
-			this.error = OAUTH_ERRORS[q.get('gh_error')] || 'GitHub-Verbindung fehlgeschlagen.'
+			this.error = tr(OAUTH_ERRORS[q.get('gh_error')] || 'GitHub connection failed.')
 		}
 		try {
 			const [maps, boards, status] = await Promise.all([
@@ -212,16 +214,16 @@ export default {
 			this.status = status.data
 			if (returnedFromOAuth) {
 				if (this.status.connected) {
-					this.notice = `Erfolgreich mit GitHub verbunden als ${this.status.login}.`
+					this.notice = tr('Connected to GitHub as {login}.', { login: this.status.login })
 				} else {
-					this.error = this.status.reason || 'GitHub hat die Anmeldung abgeschlossen, aber die Verbindung konnte nicht bestätigt werden.'
+					this.error = this.status.reason || tr('GitHub sign-in completed, but the connection could not be verified.')
 				}
 			}
 			if (this.status.connected) {
 				await Promise.all([this.loadProjects(), this.loadRepositories()])
 			}
 		} catch (e) {
-			this.error = 'Daten konnten nicht geladen werden.'
+			this.error = tr('Data could not be loaded.')
 		} finally {
 			this.loading = false
 			if (returnedFromOAuth || q.has('gh_error')) {
@@ -233,13 +235,14 @@ export default {
 	},
 	methods: {
 		apiUrl,
+		tr,
 		async loadDateFields(m, event) {
 			if (!event.target.open || this.dateFields[m.id]) return
 			try {
 				const { data } = await axios.get(apiUrl(`/api/v1/mappings/${m.id}/date-fields`))
 				this.dateFields[m.id] = Array.isArray(data) ? data : []
 			} catch (e) {
-				this.error = e.response?.data?.error || 'Datumsfelder konnten nicht geladen werden.'
+				this.error = e.response?.data?.error || tr('Date fields could not be loaded.')
 			}
 		},
 		async loadRepositories() {
@@ -249,7 +252,7 @@ export default {
 				this.repositories = Array.isArray(data) ? data : []
 			} catch (e) {
 				this.repositories = []
-				this.repositoryError = e.response?.data?.error || 'Repositories konnten nicht geladen werden.'
+				this.repositoryError = e.response?.data?.error || tr('Repositories could not be loaded.')
 			}
 		},
 		async refreshConnection() {
@@ -260,15 +263,15 @@ export default {
 				const { data } = await axios.get(apiUrl('/api/v1/github/status'))
 				this.status = data
 				if (data.connected) {
-					this.notice = `GitHub-Verbindung bestätigt: ${data.login}.`
+					this.notice = tr('GitHub connection confirmed: {login}.', { login: data.login })
 					await Promise.all([this.loadProjects(), this.loadRepositories()])
 				} else {
 					this.projects = []
 					this.repositories = []
-					this.error = data.reason || 'GitHub-Verbindung konnte nicht bestätigt werden.'
+					this.error = data.reason || tr('GitHub connection could not be confirmed.')
 				}
 			} catch (e) {
-				this.error = 'Verbindung konnte nicht geprüft werden. Bitte später erneut versuchen.'
+				this.error = tr('Connection could not be checked. Try again later.')
 			} finally {
 				this.checkingConnection = false
 			}
@@ -283,12 +286,12 @@ export default {
 					this.selectedProjectId = ''
 				}
 				if (!this.projects.length) {
-					this.projectError = 'Keine Projects gefunden. Prüfe die GitHub-Berechtigungen oder gib das Project manuell ein.'
+					this.projectError = tr('No projects found. Check GitHub permissions or enter the project manually.')
 				}
 			} catch (e) {
 				this.projects = []
 				this.selectedProjectId = ''
-				this.projectError = e.response?.data?.error || 'Projects konnten nicht geladen werden. Du kannst sie manuell eingeben.'
+				this.projectError = e.response?.data?.error || tr('Projects could not be loaded. You can enter one manually.')
 			} finally {
 				this.projectsLoading = false
 			}
@@ -297,7 +300,7 @@ export default {
 			return (this.boards.find((b) => b.id === id) || {}).title || ('Board ' + id)
 		},
 		dirLabel(d) {
-			return DIRS[d] || d
+			return DIRS[d] ? tr(DIRS[d]) : d
 		},
 		async create() {
 			this.error = ''
@@ -312,9 +315,9 @@ export default {
 				this.mappings.push(data)
 				this.form = { deckBoardId: 0, githubOwner: '', githubNumber: null, direction: 'both', githubRepository: '' }
 				this.selectedProjectId = ''
-				this.notice = 'Mapping angelegt.'
+				this.notice = tr('Mapping created.')
 			} catch (e) {
-				this.error = e.response?.data?.error || 'Mapping konnte nicht angelegt werden (GitHub-Project prüfen).'
+				this.error = e.response?.data?.error || tr('Mapping could not be created. Check the GitHub Project.')
 			} finally {
 				this.creating = false
 			}
@@ -329,7 +332,7 @@ export default {
 				})
 				Object.assign(m, data)
 			} catch (e) {
-				this.error = e.response?.data?.error || 'Speichern fehlgeschlagen.'
+				this.error = e.response?.data?.error || tr('Save failed.')
 				try {
 					const { data } = await axios.get(apiUrl('/api/v1/mappings'))
 					this.mappings = Array.isArray(data) ? data : this.mappings
@@ -342,22 +345,22 @@ export default {
 					users: m.userMap.filter((u) => u.githubLogin && u.deckUid),
 				})
 				m.userMap = data.userMap
-				this.notice = 'Nutzer-Mapping gespeichert.'
+				this.notice = tr('User mapping saved.')
 			} catch (e) {
-				this.error = 'Nutzer-Mapping konnte nicht gespeichert werden.'
+				this.error = tr('User mapping could not be saved.')
 			}
 		},
 		async remove(m) {
-			if (!window.confirm('Mapping wirklich löschen?')) {
+			if (!window.confirm(tr('Delete this mapping?'))) {
 				return
 			}
 			this.error = ''
 			try {
 				await axios.delete(apiUrl(`/api/v1/mappings/${m.id}`))
 				this.mappings = this.mappings.filter((x) => x.id !== m.id)
-				this.notice = 'Mapping gelöscht.'
+				this.notice = tr('Mapping deleted.')
 			} catch (e) {
-				this.error = e.response?.data?.error || 'Mapping konnte nicht gelöscht werden.'
+				this.error = e.response?.data?.error || tr('Mapping could not be deleted.')
 			}
 		},
 		async sync(m) {
@@ -366,7 +369,9 @@ export default {
 				const { data } = await axios.post(apiUrl(`/api/v1/sync/${m.id}`))
 				const errs = (data.errors || []).length
 				const warns = (data.warnings || []).length
-				this.results[m.id] = `Deck→GitHub: ${data.deck_to_github}, GitHub→Deck: ${data.github_to_deck}` + (errs ? `, Fehler: ${errs}` : '') + (warns ? `, Hinweise: ${warns}` : '')
+				this.results[m.id] = tr('Deck→GitHub: {toGithub}, GitHub→Deck: {toDeck}', { toGithub: data.deck_to_github, toDeck: data.github_to_deck })
+					+ (errs ? tr(', errors: {count}', { count: errs }) : '') + (warns ? tr(', warnings: {count}', { count: warns }) : '')
+				this.resultErrors[m.id] = errs > 0
 				if (errs) {
 					this.error = data.errors.join('; ')
 				} else {
@@ -376,7 +381,7 @@ export default {
 					this.notice = data.warnings.join('; ')
 				}
 			} catch (e) {
-				this.error = 'Sync fehlgeschlagen.'
+				this.error = tr('Sync failed.')
 			} finally {
 				this.syncing[m.id] = false
 			}
@@ -389,15 +394,15 @@ export default {
 				const { data } = await axios.put(apiUrl('/api/v1/github/token'), { token: this.pat })
 				this.status = { connected: true, login: data.login, oauth: this.status.oauth }
 				this.pat = ''
-				this.notice = `Erfolgreich mit GitHub verbunden als ${data.login}.`
+				this.notice = tr('Connected to GitHub as {login}.', { login: data.login })
 				await Promise.all([this.loadProjects(), this.loadRepositories()])
 			} catch (e) {
 				const status = e.response?.status
 				this.error = e.response?.data?.error
-					|| (status === 403 ? 'Nextcloud hat die Anfrage abgelehnt (403). Bitte neu anmelden und erneut versuchen.'
-						: status === 404 ? 'Der Token-Endpunkt wurde nicht gefunden (404). Bitte die App aktualisieren.'
-							: status ? `Token konnte nicht gespeichert werden (HTTP ${status}).`
-								: 'Nextcloud ist nicht erreichbar. Bitte Verbindung prüfen.')
+					|| (status === 403 ? tr('Nextcloud rejected the request (403). Sign in again and retry.')
+						: status === 404 ? tr('The token endpoint was not found (404). Update the app.')
+							: status ? tr('Token could not be saved (HTTP {status}).', { status })
+								: tr('Nextcloud is unavailable. Check your connection.'))
 			} finally {
 				this.savingPat = false
 			}
@@ -411,9 +416,9 @@ export default {
 				this.selectedProjectId = ''
 				this.projectError = ''
 				this.error = ''
-				this.notice = 'GitHub-Verbindung getrennt.'
+				this.notice = tr('GitHub disconnected.')
 			} catch (e) {
-				this.error = 'GitHub-Verbindung konnte nicht getrennt werden.'
+				this.error = tr('GitHub could not be disconnected.')
 			}
 		},
 	},

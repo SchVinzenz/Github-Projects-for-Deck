@@ -11,6 +11,7 @@ namespace OCA\DeckGithubSync\Service;
 
 use OCP\Http\Client\IClientService;
 use OCP\IConfig;
+use OCP\IL10N;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -24,6 +25,7 @@ class GithubClientService {
 		private IClientService $clientService,
 		private IConfig $config,
 		private LoggerInterface $logger,
+		private IL10N $l,
 	) {
 	}
 
@@ -154,7 +156,7 @@ class GithubClientService {
 			if (is_array($data) && isset($data['login']) && is_string($data['login'])) {
 				return ['login' => $data['login'], 'error' => null, 'status' => 200];
 			}
-			return ['login' => null, 'error' => 'GitHub hat keine Benutzerkennung zurückgegeben.', 'status' => 502];
+			return ['login' => null, 'error' => $this->l->t('GitHub did not return a user login.'), 'status' => 502];
 		} catch (\Throwable $e) {
 			$status = null;
 			if (method_exists($e, 'getResponse')) {
@@ -163,12 +165,12 @@ class GithubClientService {
 			}
 			$this->logger->warning('deckgithubsync: GitHub token validation failed', ['githubStatus' => $status, 'exceptionType' => get_class($e)]);
 			if ($status === 401) {
-				return ['login' => null, 'error' => 'GitHub hat den Token abgelehnt (401). Token und Ablaufdatum prüfen.', 'status' => 401];
+				return ['login' => null, 'error' => $this->l->t('GitHub rejected the token (401). Check the token and expiry date.'), 'status' => 401];
 			}
 			if ($status === 403) {
-				return ['login' => null, 'error' => 'GitHub verweigert den Zugriff (403). Berechtigungen oder Rate-Limit prüfen.', 'status' => 403];
+				return ['login' => null, 'error' => $this->l->t('GitHub denied access (403). Check permissions or the rate limit.'), 'status' => 403];
 			}
-			return ['login' => null, 'error' => 'GitHub ist vom Nextcloud-Server aus nicht erreichbar oder antwortet fehlerhaft.', 'status' => 502];
+			return ['login' => null, 'error' => $this->l->t('GitHub is unreachable from the Nextcloud server or returned an invalid response.'), 'status' => 502];
 		}
 	}
 

@@ -4,46 +4,47 @@
 		<div v-if="error" class="deckghs-note deckghs-note-err">{{ error }}</div>
 
 		<section class="deckghs-card">
-			<h2>GitHub App <span class="deckghs-muted">(Server-Sync)</span></h2>
-			<p class="deckghs-muted">Für Hintergrund-Sync ohne Nutzer-Token. Permissions: Projects R/W, Issues R/W.</p>
+			<h2>GitHub App <span class="deckghs-muted">{{ tr("(server sync)") }}</span></h2>
+			<p class="deckghs-muted">{{ tr("For background sync without a user token. Permissions: Projects R/W, Issues R/W.") }}</p>
 			<div class="deckghs-grid">
 				<label>App ID <input v-model="form.githubAppId" inputmode="numeric" /></label>
 				<label>Installation ID <input v-model="form.githubInstallationId" inputmode="numeric" /></label>
 			</div>
-			<label class="deckghs-block">Private Key (.pem){{ hasPrivateKey ? ' (gespeichert)' : '' }}
-				<textarea v-model="form.githubPrivateKey" rows="3" placeholder="Nur beim Ändern einfügen – gespeicherter Key bleibt sonst erhalten." autocomplete="off" />
+			<label class="deckghs-block">{{ tr("Private key (.pem)") }}{{ hasPrivateKey ? tr(' (saved)') : '' }}
+				<textarea v-model="form.githubPrivateKey" rows="3" :placeholder="tr('Only enter when changing it. The saved key remains otherwise.')" autocomplete="off" />
 			</label>
 			<div class="deckghs-grid">
 				<label>Webhook Secret <input v-model="form.webhookSecret" type="password" autocomplete="off" /></label>
-				<label>Sync-Intervall (s, min. 300) <input v-model.number="form.syncInterval" type="number" min="300" /></label>
+				<label>{{ tr("Sync interval (s, min. 300)") }} <input v-model.number="form.syncInterval" type="number" min="300" /></label>
 			</div>
 		</section>
 
 		<section class="deckghs-card">
-			<h2>GitHub OAuth <span class="deckghs-muted">(Login für Nutzer)</span></h2>
-			<p class="deckghs-muted">Einmal hier einrichten. Danach verbindet jeder Nextcloud-Benutzer sein eigenes GitHub-Konto in den persönlichen Einstellungen.</p>
+			<h2>GitHub OAuth <span class="deckghs-muted">{{ tr("(user sign-in)") }}</span></h2>
+			<p class="deckghs-muted">{{ tr("Set this up once. Each Nextcloud user can then connect their GitHub account in personal settings.") }}</p>
 			<ol class="deckghs-steps">
-				<li>OAuth App unter GitHub → Settings → Developer settings → OAuth Apps anlegen.</li>
-				<li>Als Authorization callback URL exakt eintragen:
+				<li>{{ tr("Create an OAuth app under GitHub → Settings → Developer settings → OAuth Apps.") }}</li>
+				<li>{{ tr("Enter this exact authorization callback URL:") }}
 					<span class="deckghs-copyrow"><code class="deckghs-code">{{ form.oauthCallbackUrl }}</code>
-					<button class="deckghs-btn small" type="button" @click="copyCallback">{{ copied ? 'Kopiert ✓' : 'Kopieren' }}</button></span>
+					<button class="deckghs-btn small" type="button" @click="copyCallback">{{ copied ? tr('Copied ✓') : tr('Copy') }}</button></span>
 				</li>
-				<li>Client ID und Client Secret unten eintragen und speichern.</li>
+				<li>{{ tr("Enter and save the client ID and client secret below.") }}</li>
 			</ol>
 			<div class="deckghs-grid">
 				<label>Client ID <input v-model="form.oauthClientId" autocomplete="off" /></label>
-				<label>Client Secret <input v-model="form.oauthClientSecret" type="password" autocomplete="off" placeholder="Nur beim Ändern einfügen" /></label>
+				<label>Client Secret <input v-model="form.oauthClientSecret" type="password" autocomplete="off" :placeholder="tr('Only enter when changing it')" /></label>
 			</div>
-			<p class="deckghs-muted">Client Secret: {{ hasOauthSecret ? 'gespeichert' : 'noch nicht gespeichert' }}.</p>
+			<p class="deckghs-muted">Client Secret: {{ hasOauthSecret ? tr('saved') : tr('not saved yet') }}.</p>
 		</section>
 
-		<button class="deckghs-btn primary big" :disabled="saving" @click="save">{{ saving ? 'Speichert …' : 'Speichern' }}</button>
+		<button class="deckghs-btn primary big" :disabled="saving" @click="save">{{ saving ? tr('Saving …') : tr('Save') }}</button>
 	</div>
 </template>
 
 <script>
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
+import { tr } from '../l10n.js'
 
 const apiUrl = (path) => generateUrl('/apps/deckgithubsync' + path)
 
@@ -75,10 +76,11 @@ export default {
 			this.hasOauthSecret = data.has_oauth_secret
 			this.hasPrivateKey = data.has_private_key
 		} catch (e) {
-			this.error = 'Konfiguration konnte nicht geladen werden.'
+			this.error = tr('Configuration could not be loaded.')
 		}
 	},
 	methods: {
+		tr,
 		async copyCallback() {
 			const text = this.form.oauthCallbackUrl || ''
 			try {
@@ -95,7 +97,7 @@ export default {
 				this.copied = true
 				setTimeout(() => { this.copied = false }, 2000)
 			} catch (e) {
-				this.error = 'Kopieren fehlgeschlagen – URL bitte manuell markieren.'
+				this.error = tr('Copy failed. Select the URL manually.')
 			}
 		},
 		async save() {
@@ -116,9 +118,9 @@ export default {
 				this.form.oauthClientSecret = ''
 				this.hasOauthSecret = data.has_oauth_secret
 				this.hasPrivateKey = data.has_private_key
-				this.notice = 'Gespeichert.'
+				this.notice = tr('Saved.')
 			} catch (e) {
-				this.error = 'Speichern fehlgeschlagen.'
+				this.error = tr('Save failed.')
 			} finally {
 				this.saving = false
 			}

@@ -23,6 +23,7 @@ use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\Http;
 use OCP\IConfig;
 use OCP\IDBConnection;
+use OCP\IL10N;
 use OCP\IRequest;
 use OCP\IURLGenerator;
 
@@ -39,6 +40,7 @@ class SettingsController extends Controller {
 		private GithubClientService $github,
 		private DeckService $deck,
 		private IURLGenerator $urls,
+		private IL10N $l,
 		private ?string $userId,
 	) {
 		parent::__construct($appName, $request);
@@ -55,7 +57,7 @@ class SettingsController extends Controller {
 		try {
 			$map = $this->maps->findById($id);
 			if ($map->getUserId() !== $this->userId) {
-				return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+				return new DataResponse(['error' => $this->l->t('Not found')], Http::STATUS_NOT_FOUND);
 			}
 			$fields = $this->projects->getFields($this->userId ?? '', $map->getGithubProjectId());
 			return new DataResponse(array_values(array_map(
@@ -63,44 +65,44 @@ class SettingsController extends Controller {
 				array_filter($fields['fields'] ?? [], static fn (array $f): bool => ($f['dataType'] ?? '') === 'DATE' && isset($f['id'], $f['name']))
 			)));
 		} catch (\Throwable) {
-			return new DataResponse(['error' => 'Datumsfelder konnten nicht geladen werden.'], Http::STATUS_BAD_GATEWAY);
+			return new DataResponse(['error' => $this->l->t('Date fields could not be loaded.')], Http::STATUS_BAD_GATEWAY);
 		}
 	}
 
 	#[NoAdminRequired]
 	public function createMapping(int $deckBoardId, string $githubOwner, int $githubNumber, string $direction = 'both', array $fieldConfig = [], string $githubRepository = ''): DataResponse {
 		if (!in_array($direction, ['both', 'deck_to_github', 'github_to_deck'], true)) {
-			return new DataResponse(['error' => 'Invalid direction'], Http::STATUS_BAD_REQUEST);
+			return new DataResponse(['error' => $this->l->t('Invalid direction')], Http::STATUS_BAD_REQUEST);
 		}
 		try {
 			$this->deck->getStacks($this->userId ?? '', $deckBoardId);
 		} catch (\Throwable $e) {
-			return new DataResponse(['error' => 'Deck-Board nicht gefunden oder kein Zugriff.'], Http::STATUS_BAD_REQUEST);
+			return new DataResponse(['error' => $this->l->t('Deck board not found or access denied.')], Http::STATUS_BAD_REQUEST);
 		}
 		try {
 			$projectId = $this->projects->resolveProjectId($this->userId ?? '', $githubOwner, $githubNumber);
 		} catch (\Throwable $e) {
-			return new DataResponse(['error' => 'GitHub Project konnte nicht geprüft werden. Bitte Zugriff und Project-Berechtigungen prüfen.'], Http::STATUS_BAD_GATEWAY);
+			return new DataResponse(['error' => $this->l->t('GitHub Project could not be verified. Check access and project permissions.')], Http::STATUS_BAD_GATEWAY);
 		}
 		if ($projectId === null) {
-			return new DataResponse(['error' => 'GitHub Project wurde nicht gefunden. Owner und Project-Nummer prüfen.'], Http::STATUS_BAD_REQUEST);
+			return new DataResponse(['error' => $this->l->t('GitHub Project not found. Check the owner and project number.')], Http::STATUS_BAD_REQUEST);
 		}
 		if ($githubRepository !== '') {
 			try {
 				$this->projects->getRepositoryNodeId($this->userId ?? '', $githubRepository);
 			} catch (\Throwable) {
-				return new DataResponse(['error' => 'Das Issue-Repository ist nicht erreichbar oder kann keine Issues erstellen.'], Http::STATUS_BAD_REQUEST);
+				return new DataResponse(['error' => $this->l->t('The issue repository is unavailable or cannot create issues.')], Http::STATUS_BAD_REQUEST);
 			}
 		}
 		foreach ($this->maps->findByUser($this->userId ?? '') as $existing) {
 			if ($existing->getDeckBoardId() === $deckBoardId && $existing->getGithubProjectId() === $projectId) {
-				return new DataResponse(['error' => 'Für dieses Deck-Board und GitHub Project gibt es bereits ein Mapping.'], Http::STATUS_CONFLICT);
+				return new DataResponse(['error' => $this->l->t('A mapping already exists for this Deck board and GitHub Project.')], Http::STATUS_CONFLICT);
 			}
 		}
 		try {
 			$fields = $this->projects->getFields($this->userId ?? '', $projectId);
 		} catch (\Throwable $e) {
-			return new DataResponse(['error' => 'GitHub-Project konnte nicht gelesen werden.'], Http::STATUS_BAD_GATEWAY);
+			return new DataResponse(['error' => $this->l->t('GitHub Project could not be read.')], Http::STATUS_BAD_GATEWAY);
 		}
 		$map = new BoardMap();
 		$map->setUserId($this->userId ?? '');
@@ -124,14 +126,14 @@ class SettingsController extends Controller {
 		try {
 			$map = $this->maps->findById($id);
 		} catch (\Exception) {
-			return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+			return new DataResponse(['error' => $this->l->t('Not found')], Http::STATUS_NOT_FOUND);
 		}
 		if ($map->getUserId() !== $this->userId) {
-			return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+			return new DataResponse(['error' => $this->l->t('Not found')], Http::STATUS_NOT_FOUND);
 		}
 		if ($direction !== null) {
 			if (!in_array($direction, ['both', 'deck_to_github', 'github_to_deck'], true)) {
-				return new DataResponse(['error' => 'Invalid direction'], Http::STATUS_BAD_REQUEST);
+				return new DataResponse(['error' => $this->l->t('Invalid direction')], Http::STATUS_BAD_REQUEST);
 			}
 			$map->setDirection($direction);
 		}
@@ -144,10 +146,10 @@ class SettingsController extends Controller {
 					$fields = $this->projects->getFields($this->userId ?? '', $map->getGithubProjectId());
 					$valid = array_filter($fields['fields'] ?? [], static fn (array $f): bool => ($f['dataType'] ?? '') === 'DATE' && ($f['id'] ?? '') === $dateFieldId);
 					if ($valid === []) {
-						return new DataResponse(['error' => 'Ungültiges Datumsfeld.'], Http::STATUS_BAD_REQUEST);
+						return new DataResponse(['error' => $this->l->t('Invalid date field.')], Http::STATUS_BAD_REQUEST);
 					}
 				} catch (\Throwable) {
-					return new DataResponse(['error' => 'Datumsfeld konnte nicht geprüft werden.'], Http::STATUS_BAD_GATEWAY);
+					return new DataResponse(['error' => $this->l->t('Date field could not be verified.')], Http::STATUS_BAD_GATEWAY);
 				}
 			}
 			$map->setDateFieldId($dateFieldId);
@@ -157,7 +159,7 @@ class SettingsController extends Controller {
 				try {
 					$this->projects->getRepositoryNodeId($this->userId ?? '', $githubRepository);
 				} catch (\Throwable) {
-					return new DataResponse(['error' => 'Das Issue-Repository ist nicht erreichbar oder kann keine Issues erstellen.'], Http::STATUS_BAD_REQUEST);
+					return new DataResponse(['error' => $this->l->t('The issue repository is unavailable or cannot create issues.')], Http::STATUS_BAD_REQUEST);
 				}
 			}
 			$map->setGithubRepository($githubRepository);
@@ -171,10 +173,10 @@ class SettingsController extends Controller {
 		try {
 			$map = $this->maps->findById($id);
 		} catch (\Exception) {
-			return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+			return new DataResponse(['error' => $this->l->t('Not found')], Http::STATUS_NOT_FOUND);
 		}
 		if ($map->getUserId() !== $this->userId) {
-			return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+			return new DataResponse(['error' => $this->l->t('Not found')], Http::STATUS_NOT_FOUND);
 		}
 		$this->db->beginTransaction();
 		try {
@@ -188,7 +190,7 @@ class SettingsController extends Controller {
 			$this->db->commit();
 		} catch (\Throwable $e) {
 			$this->db->rollBack();
-			return new DataResponse(['error' => 'Mapping konnte nicht gelöscht werden.'], Http::STATUS_INTERNAL_SERVER_ERROR);
+			return new DataResponse(['error' => $this->l->t('Mapping could not be deleted.')], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 		return new DataResponse([]);
 	}
@@ -238,8 +240,8 @@ class SettingsController extends Controller {
 			return new DataResponse($this->projects->listAvailableProjects($this->userId ?? ''));
 		} catch (\Throwable $e) {
 			$message = str_contains($e->getMessage(), 'INSUFFICIENT_SCOPES')
-				? 'GitHub-Token benötigt Project-Leserechte. Bei OAuth bitte erneut verbinden.'
-				: 'GitHub Projects konnten nicht geladen werden. Verbindung und Berechtigungen prüfen.';
+				? $this->l->t('GitHub token needs project read permission. Reconnect if using OAuth.')
+				: $this->l->t('GitHub Projects could not be loaded. Check the connection and permissions.');
 			return new DataResponse(['error' => $message], Http::STATUS_BAD_GATEWAY);
 		}
 	}
@@ -249,7 +251,7 @@ class SettingsController extends Controller {
 		try {
 			return new DataResponse($this->projects->listAvailableRepositories($this->userId ?? ''));
 		} catch (\Throwable) {
-			return new DataResponse(['error' => 'GitHub-Repositories konnten nicht geladen werden.'], Http::STATUS_BAD_GATEWAY);
+			return new DataResponse(['error' => $this->l->t('GitHub repositories could not be loaded.')], Http::STATUS_BAD_GATEWAY);
 		}
 	}
 
@@ -264,7 +266,7 @@ class SettingsController extends Controller {
 		try {
 			$token = $this->github->getUserAccessToken($this->userId ?? '');
 		} catch (\Throwable) {
-			return new DataResponse(['connected' => false, 'invalid' => true, 'oauth' => $oauth, 'reason' => 'GitHub-Verbindung abgelaufen. Bitte erneut verbinden.']);
+			return new DataResponse(['connected' => false, 'invalid' => true, 'oauth' => $oauth, 'reason' => $this->l->t('GitHub connection expired. Connect again.')]);
 		}
 		$result = $this->github->inspectUserToken($token);
 		if ($result['login'] === null) {
@@ -277,7 +279,7 @@ class SettingsController extends Controller {
 	public function setUserToken(string $token): DataResponse {
 		$token = trim($token);
 		if ($token === '') {
-			return new DataResponse(['error' => 'Bitte einen GitHub-Token eingeben.'], Http::STATUS_BAD_REQUEST);
+			return new DataResponse(['error' => $this->l->t('Enter a GitHub token.')], Http::STATUS_BAD_REQUEST);
 		}
 		$result = $this->github->inspectUserToken($token);
 		if ($result['login'] === null) {
@@ -322,10 +324,10 @@ class SettingsController extends Controller {
 		try {
 			$map = $this->maps->findById($id);
 		} catch (\Exception) {
-			return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+			return new DataResponse(['error' => $this->l->t('Not found')], Http::STATUS_NOT_FOUND);
 		}
 		if ($map->getUserId() !== $this->userId) {
-			return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+			return new DataResponse(['error' => $this->l->t('Not found')], Http::STATUS_NOT_FOUND);
 		}
 		try {
 			foreach ($this->userMaps->findByMap($id) as $old) {

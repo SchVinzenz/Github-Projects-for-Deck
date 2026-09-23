@@ -9,6 +9,7 @@ Basis: `/index.php/apps/deckgithubsync`, Auth: Nextcloud-Session (+ CSRF).
 | GET | `/api/v1/mappings` | Eigene Mappings listen |
 | POST | `/api/v1/mappings` | Anlegen (`deckBoardId`, `githubOwner`, `githubNumber`, `direction`, `fieldConfig`, `githubRepository?`) – löst Project-ID + Feld-IDs auf |
 | PUT | `/api/v1/mappings/{id}` | Richtung, Feldconfig, `dateFieldId`, `githubRepository` ändern |
+| GET | `/api/v1/mappings/{id}/date-fields` | Verfügbare GitHub-Datumsfelder für das Mapping |
 | DELETE | `/api/v1/mappings/{id}` | Löschen |
 | PUT | `/api/v1/mappings/{id}/users` | Nutzer-Mapping setzen (`users: [{githubLogin, deckUid}]`) |
 

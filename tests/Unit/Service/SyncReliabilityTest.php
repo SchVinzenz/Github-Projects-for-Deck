@@ -12,6 +12,7 @@ use OCA\DeckGithubSync\Db\UserMapMapper;
 use OCA\DeckGithubSync\Service\DeckService;
 use OCA\DeckGithubSync\Service\GithubProjectService;
 use OCA\DeckGithubSync\Service\SyncService;
+use OCP\IL10N;
 use OCP\IUserManager;
 use OCP\IUserSession;
 use PHPUnit\Framework\TestCase;
@@ -63,7 +64,7 @@ class SyncReliabilityTest extends TestCase {
 		]], 'hasNext' => false, 'cursor' => null]);
 		$github->method('getIssueComments')->willReturn([['id' => 99, 'body' => 'Hello', 'user' => 'bob', 'created_at' => '']]);
 		$sync = new SyncService($boardMaps, $itemMaps, $userMaps, $deck, $github,
-			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class));
+			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class));
 		$result = $sync->syncBoard($map);
 		$this->assertSame([], $result['errors']);
 		$this->assertSame(1, $result['github_to_deck']);
@@ -111,7 +112,7 @@ class SyncReliabilityTest extends TestCase {
 		$github->expects($this->once())->method('setIssueLabels')->with('alice', 'org/repo', 7, ['bug']);
 		$github->expects($this->once())->method('setStatus')->with('alice', 'P1', 'I1', 'F1', 'O1');
 		$sync = new SyncService($boardMaps, $itemMaps, $userMaps, $deck, $github,
-			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class));
+			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class));
 		$result = $sync->syncBoard($map);
 		$this->assertSame([], $result['errors']);
 		$this->assertSame(1, $result['deck_to_github']);
@@ -158,7 +159,7 @@ class SyncReliabilityTest extends TestCase {
 		$github->expects($this->never())->method('addDraft');
 		$github->expects($this->once())->method('setStatus')->with('alice', 'P1', 'I1', 'F1', 'O1');
 		$sync = new SyncService($boardMaps, $itemMaps, $userMaps, $deck, $github,
-			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class));
+			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class));
 		$result = $sync->syncBoard($map);
 		$this->assertSame([], $result['errors']);
 		$this->assertSame(1, $result['deck_to_github']);
@@ -211,7 +212,7 @@ class SyncReliabilityTest extends TestCase {
 		});
 
 		$sync = new SyncService($boardMaps, $itemMaps, $userMaps, $deck, $github,
-			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class));
+			$this->createMock(IUserManager::class), $this->createMock(IUserSession::class), $this->createMock(LoggerInterface::class), $this->createMock(IL10N::class));
 		$result = $sync->syncBoard($map);
 		$this->assertCount(1, $result['errors']);
 		$this->assertSame(0, $result['deck_to_github']);

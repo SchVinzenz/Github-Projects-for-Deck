@@ -15,6 +15,10 @@ Nextcloud Deck und GitHub Projects v2.
 - **Automatik**: Cron-Job (Intervall einstellbar, min. 300 s) plus optionaler
   GitHub-Webhook für Echtzeit; manueller Sync per Button oder
   `php occ deckgithubsync:sync [mapping-id]`
+- **Große Boards**: Deck-Karten werden in Batches gelesen. Nach einem
+  vollständigen Abgleich werden GitHub-Items bei unveränderten Deck-Daten
+  über den Project-Filter `updated` eingegrenzt; mindestens einmal pro UTC-Tag
+  erfolgt ein vollständiger Abgleich.
 - **Sync-Logik**: Beide Richtungen für Anlage + Update, Last-Write-Wins,
   getrennte Deck-/GitHub-Hashes (idempotent), Titel-Dedup bei neuen Mappings,
   race-sichere Links, Session-Isolation für Cron
@@ -24,7 +28,9 @@ Nextcloud Deck und GitHub Projects v2.
   Schema-Anpassungen) laufen best-effort mit Warnungen statt Abbrüchen;
   GraphQL-Fehler brechen laut ab statt still leer zu liefern; destruktive
   Aktionen nur per explizitem Webhook-Event, nie per Listen-Abwesenheit
-- **Tests & Doku**: 30 Unit-Tests, Docs unter `docs/`
+- **Sprachen**: Englische Quelltexte und deutsche Übersetzung für Einstellungen
+  und API-Meldungen (`l10n/`)
+- **Tests & Doku**: 34 Unit-Tests, Docs unter `docs/`
 
 ## Mapping
 

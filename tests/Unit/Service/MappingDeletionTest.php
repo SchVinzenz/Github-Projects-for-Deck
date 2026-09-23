@@ -16,6 +16,7 @@ use OCA\DeckGithubSync\Service\GithubClientService;
 use OCA\DeckGithubSync\Service\GithubProjectService;
 use OCP\IConfig;
 use OCP\IDBConnection;
+use OCP\IL10N;
 use OCP\IRequest;
 use OCP\IURLGenerator;
 use PHPUnit\Framework\TestCase;
@@ -38,7 +39,7 @@ class MappingDeletionTest extends TestCase {
 			$this->createMock(IConfig::class), $db, $maps, $items,
 			$this->createMock(UserMapMapper::class), $this->createMock(GithubProjectService::class),
 			$this->createMock(GithubClientService::class), $this->createMock(DeckService::class),
-			$this->createMock(IURLGenerator::class), 'alice');
+			$this->createMock(IURLGenerator::class), $this->createMock(IL10N::class), 'alice');
 		$this->assertSame(500, $controller->deleteMapping(5)->getStatus());
 	}
 
@@ -64,7 +65,7 @@ class MappingDeletionTest extends TestCase {
 		$controller = new SettingsController('deckgithubsync', $this->createMock(IRequest::class),
 			$this->createMock(IConfig::class), $db, $maps, $items, $users,
 			$this->createMock(GithubProjectService::class), $this->createMock(GithubClientService::class),
-			$this->createMock(DeckService::class), $this->createMock(IURLGenerator::class), 'alice');
+			$this->createMock(DeckService::class), $this->createMock(IURLGenerator::class), $this->createMock(IL10N::class), 'alice');
 		$this->assertSame(200, $controller->deleteMapping(5)->getStatus());
 	}
 }
