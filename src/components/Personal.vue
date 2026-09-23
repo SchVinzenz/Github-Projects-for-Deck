@@ -6,7 +6,7 @@
 		<section class="deckghs-card">
 			<div class="deckghs-connection-header">
 				<div>
-					<h2><span class="deckghs-step" aria-hidden="true">1</span>{{ tr("Connect GitHub") }}</h2>
+					<h2>{{ tr("Connect GitHub") }}</h2>
 					<p class="deckghs-muted">{{ tr("Connect your personal GitHub account to sync projects.") }}</p>
 				</div>
 				<span v-if="!loading" class="deckghs-status" :class="status.connected ? 'connected' : 'disconnected'">
@@ -41,7 +41,7 @@
 		</section>
 
 		<section class="deckghs-card">
-			<h2><span class="deckghs-step" aria-hidden="true">2</span>{{ tr("Board mappings") }}</h2>
+			<h2>{{ tr("Board mappings") }}</h2>
 			<p v-if="!loading && !status.connected" class="deckghs-note deckghs-note-warn">{{ tr("Connect your GitHub account above before creating a mapping.") }}</p>
 			<p v-if="!mappings.length" class="deckghs-muted">{{ tr("No mappings yet. Create your first one below.") }}</p>
 			<article v-for="m in mappings" :key="m.id" class="deckghs-map">
@@ -101,7 +101,7 @@
 		</section>
 
 		<section class="deckghs-card">
-			<h2><span class="deckghs-step" aria-hidden="true">3</span>{{ tr("New mapping") }}</h2>
+			<h2>{{ tr("New mapping") }}</h2>
 			<p class="deckghs-muted">{{ tr("Choose a Deck board and a GitHub Project. GitHub repositories are not project mappings.") }}</p>
 			<p class="deckghs-muted">{{ tr("Choose an issue repository to create GitHub issues from cards. Existing linked drafts are converted on the next sync. Without a repository they remain project drafts.") }}</p>
 			<div class="deckghs-row">
@@ -427,9 +427,9 @@ export default {
 
 <style scoped>
 .deckghs-wrap { max-width: 860px; display: flex; flex-direction: column; gap: 16px; }
-.deckghs-card { border: 1px solid var(--color-border); border-radius: var(--border-radius-large); padding: 16px 20px 20px; background: var(--color-main-background); box-shadow: 0 1px 2px var(--color-box-shadow, rgb(0 0 0 / 5%)); }
-.deckghs-card h2 { margin: 0 0 12px; font-size: 1.1em; display: flex; align-items: center; gap: 10px; }
-.deckghs-step { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--color-primary-element); color: var(--color-primary-element-text, #fff); font-size: 0.75em; font-weight: bold; flex-shrink: 0; }
+.deckghs-card { padding: 4px 0 20px; }
+.deckghs-card + .deckghs-card { border-top: 1px solid var(--color-border); padding-top: 20px; }
+.deckghs-card h2 { margin: 0 0 12px; font-size: 1.1em; }
 .deckghs-muted { color: var(--color-text-maxcontrast); font-size: 0.9em; }
 .deckghs-note { border-radius: var(--border-radius); padding: 8px 12px; }
 .deckghs-note-ok { background: color-mix(in srgb, var(--color-success, #46ba61) 18%, var(--color-main-background)); color: var(--color-main-text); }
@@ -442,7 +442,7 @@ export default {
 .deckghs-status.disconnected { color: var(--color-text-maxcontrast); }
 .deckghs-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: var(--color-warning, #e6a817); }
 .deckghs-status.connected .deckghs-dot { background: var(--color-success, #46ba61); }
-.deckghs-conn { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 14px; border: 1px solid var(--color-border); border-radius: var(--border-radius); background: var(--color-background-hover); }
+.deckghs-conn { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 4px 0 12px; }
 .deckghs-conn-text { flex: 1; }
 .deckghs-conn-text p { margin: 4px 0 0; }
 .deckghs-actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -454,7 +454,8 @@ export default {
 .deckghs-btn.danger { color: var(--color-error); }
 .deckghs-btn:disabled { opacity: 0.5; cursor: default; }
 .deckghs-btn:focus-visible, .deckghs-row input:focus-visible, .deckghs-row select:focus-visible, .deckghs-fields select:focus-visible { outline: 2px solid var(--color-main-text); outline-offset: 1px; }
-.deckghs-map { border: 1px solid var(--color-border); border-radius: var(--border-radius); padding: 12px 14px; margin-top: 12px; background: var(--color-background-hover); }
+.deckghs-map { border-top: 1px solid var(--color-border); padding: 12px 0; }
+.deckghs-map:first-of-type { margin-top: 12px; }
 .deckghs-map header { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .deckghs-map-title { min-width: 0; overflow-wrap: anywhere; }
 .deckghs-meta { margin: 6px 0 0; }

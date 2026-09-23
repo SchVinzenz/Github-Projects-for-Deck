@@ -131,7 +131,8 @@ export default {
 
 <style scoped>
 .deckghs-wrap { max-width: 860px; display: flex; flex-direction: column; gap: 16px; }
-.deckghs-card { border: 1px solid var(--color-border); border-radius: var(--border-radius-large); padding: 16px 20px 20px; background: var(--color-main-background); box-shadow: 0 1px 2px var(--color-box-shadow, rgb(0 0 0 / 5%)); }
+.deckghs-card { padding: 4px 0 20px; }
+.deckghs-card + .deckghs-card { border-top: 1px solid var(--color-border); padding-top: 20px; }
 .deckghs-card h2 { margin: 0 0 8px; font-size: 1.1em; }
 .deckghs-steps { margin: 8px 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; font-size: 0.95em; }
 .deckghs-copyrow { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
