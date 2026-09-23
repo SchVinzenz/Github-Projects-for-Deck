@@ -64,6 +64,11 @@ class WebhookController extends Controller {
 		$action = $payload['action'] ?? '';
 		$item = $payload['projects_v2_item'] ?? [];
 		$projectNodeId = $item['project_node_id'] ?? $payload['projectV2']['node_id'] ?? null;
+		if ($event === 'issues' && !is_string($projectNodeId)) {
+			$issueId = $payload['issue']['node_id'] ?? '';
+			$queued = is_string($issueId) && $issueId !== '' ? $this->queueIssue($issueId) : 0;
+			return new DataResponse(['queued' => $queued]);
+		}
 		if (!is_string($projectNodeId) || $projectNodeId === '') {
 			$this->logger->info('deckgithubsync webhook without project scope', ['event' => $event, 'action' => $action]);
 			return new DataResponse(['queued' => 0]);
@@ -75,12 +80,40 @@ class WebhookController extends Controller {
 				&& in_array($action, ['deleted', 'archived', 'restored'], true)) {
 				$handled += $this->applyItemEvent($map->getUserId(), (int)$map->getId(), (string)($item['node_id'] ?? ''), $action);
 			}
-			$map->setLastSync(0);
-			$this->maps->update($map);
+			$this->queueMap($map);
 			$queued++;
 		}
 		$this->logger->info('deckgithubsync webhook', ['event' => $event, 'action' => $action, 'handled' => $handled, 'queued' => $queued]);
 		return new DataResponse(['handled' => $handled, 'queued' => $queued]);
+	}
+
+	private function queueIssue(string $issueId): int {
+		$queued = 0;
+		$seen = [];
+		foreach ($this->items->findByGithubContent($issueId) as $link) {
+			$mapId = $link->getMapId();
+			if (isset($seen[$mapId])) {
+				continue;
+			}
+			$seen[$mapId] = true;
+			try {
+				$map = $this->maps->findById($mapId);
+				$this->queueMap($map);
+				$queued++;
+			} catch (\Throwable $e) {
+				$this->logger->warning('deckgithubsync: issue webhook mapping lookup failed', ['map' => $mapId, 'exception' => $e]);
+			}
+		}
+		return $queued;
+	}
+
+	private function queueMap(BoardMap $map): void {
+		// A future lastSync is a GitHub rate-limit cooldown.
+		if ($map->getLastSync() > time()) {
+			return;
+		}
+		$map->setLastSync(0);
+		$this->maps->update($map);
 	}
 
 	private function applyItemEvent(string $userId, int $mapId, string $itemNodeId, string $action): int {

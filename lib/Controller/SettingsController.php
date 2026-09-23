@@ -51,6 +51,23 @@ class SettingsController extends Controller {
 	}
 
 	#[NoAdminRequired]
+	public function mappingDateFields(int $id): DataResponse {
+		try {
+			$map = $this->maps->findById($id);
+			if ($map->getUserId() !== $this->userId) {
+				return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+			}
+			$fields = $this->projects->getFields($this->userId ?? '', $map->getGithubProjectId());
+			return new DataResponse(array_values(array_map(
+				static fn (array $f): array => ['id' => $f['id'], 'name' => $f['name']],
+				array_filter($fields['fields'] ?? [], static fn (array $f): bool => ($f['dataType'] ?? '') === 'DATE' && isset($f['id'], $f['name']))
+			)));
+		} catch (\Throwable) {
+			return new DataResponse(['error' => 'Datumsfelder konnten nicht geladen werden.'], Http::STATUS_BAD_GATEWAY);
+		}
+	}
+
+	#[NoAdminRequired]
 	public function createMapping(int $deckBoardId, string $githubOwner, int $githubNumber, string $direction = 'both', array $fieldConfig = [], string $githubRepository = ''): DataResponse {
 		if (!in_array($direction, ['both', 'deck_to_github', 'github_to_deck'], true)) {
 			return new DataResponse(['error' => 'Invalid direction'], Http::STATUS_BAD_REQUEST);
@@ -122,6 +139,17 @@ class SettingsController extends Controller {
 			$map->setFieldConfig((string)json_encode($fieldConfig));
 		}
 		if ($dateFieldId !== null) {
+			if ($dateFieldId !== '') {
+				try {
+					$fields = $this->projects->getFields($this->userId ?? '', $map->getGithubProjectId());
+					$valid = array_filter($fields['fields'] ?? [], static fn (array $f): bool => ($f['dataType'] ?? '') === 'DATE' && ($f['id'] ?? '') === $dateFieldId);
+					if ($valid === []) {
+						return new DataResponse(['error' => 'Ungültiges Datumsfeld.'], Http::STATUS_BAD_REQUEST);
+					}
+				} catch (\Throwable) {
+					return new DataResponse(['error' => 'Datumsfeld konnte nicht geprüft werden.'], Http::STATUS_BAD_GATEWAY);
+				}
+			}
 			$map->setDateFieldId($dateFieldId);
 		}
 		if ($githubRepository !== null) {

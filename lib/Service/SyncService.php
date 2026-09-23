@@ -48,6 +48,9 @@ class SyncService {
 		try {
 			$step();
 		} catch (\Throwable $e) {
+			if ($e instanceof GithubRateLimitException) {
+				throw $e;
+			}
 			$this->warnings[] = $context . ': ' . $e->getMessage();
 			$this->logger->warning('deckgithubsync: ' . $context, ['exception' => $e]);
 		}
@@ -57,6 +60,11 @@ class SyncService {
 		$prevUid = $this->userSession->getUser()?->getUID();
 		try {
 			return $this->doSyncBoard($map);
+		} catch (GithubRateLimitException $e) {
+			// A future lastSync prevents cron and webhooks from hammering GitHub.
+			$map->setLastSync($e->getRetryAt());
+			$this->boardMaps->update($map);
+			return ['deck_to_github' => 0, 'github_to_deck' => 0, 'errors' => [$e->getMessage()], 'warnings' => $this->warnings, 'retryAt' => $e->getRetryAt()];
 		} finally {
 			if ($this->userSession->getUser()?->getUID() !== $prevUid) {
 				$this->userSession->setUser($prevUid === null ? null : $this->userManager->get($prevUid));
@@ -86,6 +94,9 @@ class SyncService {
 			$deckCards = $this->deck->getCards($userId, $map->getDeckBoardId());
 			$stacks = $this->deck->getStacks($userId, $map->getDeckBoardId());
 		} catch (\Throwable $e) {
+			if ($e instanceof GithubRateLimitException) {
+				throw $e;
+			}
 			$this->logger->warning('deckgithubsync: Deck fetch failed', ['exception' => $e]);
 			$stats['errors'][] = 'deck: ' . $e->getMessage();
 			return $stats;
@@ -125,6 +136,9 @@ class SyncService {
 					$startFieldId = $dateFields['startDateFieldId'];
 					$dateFieldId = $dateFields['dateFieldId'];
 				} catch (\Throwable $e) {
+					if ($e instanceof GithubRateLimitException) {
+						throw $e;
+					}
 					$this->warnings[] = 'Datum-Felder: ' . $e->getMessage();
 					$this->logger->warning('deckgithubsync: ensureDateFields failed', ['exception' => $e]);
 				}
@@ -135,6 +149,9 @@ class SyncService {
 					try {
 						$options = $this->github->ensureStatusOptions($userId, $statusFieldId, $fields['fields'] ?? [], array_values($stackById));
 					} catch (\Throwable $e) {
+						if ($e instanceof GithubRateLimitException) {
+							throw $e;
+						}
 						$this->warnings[] = 'Status-Optionen: ' . $e->getMessage();
 						$this->logger->warning('deckgithubsync: ensureStatusOptions failed', ['exception' => $e]);
 					}
@@ -183,6 +200,9 @@ class SyncService {
 				$after = $page['hasNext'] ? $page['cursor'] : null;
 			} while ($after !== null);
 		} catch (\Throwable $e) {
+			if ($e instanceof GithubRateLimitException) {
+				throw $e;
+			}
 			$this->logger->warning('deckgithubsync: GitHub fetch failed', ['exception' => $e]);
 			$stats['errors'][] = 'github: ' . $e->getMessage();
 			return $stats;
@@ -336,6 +356,9 @@ class SyncService {
 					}
 					$stats['deck_to_github']++;
 				} catch (\Throwable $e) {
+					if ($e instanceof GithubRateLimitException) {
+						throw $e;
+					}
 					$stats['errors'][] = 'deck card ' . $card['id'] . ': ' . $e->getMessage();
 				}
 			}
@@ -431,6 +454,9 @@ class SyncService {
 					}
 					$stats['github_to_deck']++;
 				} catch (\Throwable $e) {
+					if ($e instanceof GithubRateLimitException) {
+						throw $e;
+					}
 					$stats['errors'][] = 'github item ' . $itemId . ': ' . $e->getMessage();
 				}
 			}

@@ -67,8 +67,14 @@
 					<button class="deckghs-btn danger" @click="remove(m)">Löschen</button>
 				</div>
 				<p v-if="results[m.id]" :class="results[m.id].includes('Fehler') ? 'deckghs-note deckghs-note-err' : 'deckghs-note deckghs-note-ok'">{{ results[m.id] }}</p>
-				<details>
+				<details @toggle="loadDateFields(m, $event)">
 					<summary>Felder &amp; Nutzer</summary>
+					<label>GitHub-Feld für Fälligkeit
+						<select v-model="m.dateFieldId" @change="update(m)">
+							<option value="">Automatisch erkennen</option>
+							<option v-for="f in dateFields[m.id] || []" :key="f.id" :value="f.id">{{ f.name }}</option>
+						</select>
+					</label>
 					<div class="deckghs-fields">
 						<label v-for="f in Object.keys(m.fieldConfig)" :key="f">{{ f }}
 							<select v-model="m.fieldConfig[f]" @change="update(m)">
@@ -79,6 +85,7 @@
 							</select>
 						</label>
 					</div>
+					<p class="deckghs-muted">Deck-Anhänge werden nicht synchronisiert. Dateien bleiben nur in Nextcloud verfügbar.</p>
 					<div class="deckghs-users">
 						<p class="deckghs-muted">GitHub-Login → Deck-Benutzer (für Assignees)</p>
 						<div v-for="(u, i) in m.userMap" :key="i" class="deckghs-row">
@@ -160,6 +167,7 @@ export default {
 		return {
 			loading: true,
 			mappings: [],
+			dateFields: {},
 			boards: [],
 			projects: [],
 			repositories: [],
@@ -225,6 +233,15 @@ export default {
 	},
 	methods: {
 		apiUrl,
+		async loadDateFields(m, event) {
+			if (!event.target.open || this.dateFields[m.id]) return
+			try {
+				const { data } = await axios.get(apiUrl(`/api/v1/mappings/${m.id}/date-fields`))
+				this.dateFields[m.id] = Array.isArray(data) ? data : []
+			} catch (e) {
+				this.error = e.response?.data?.error || 'Datumsfelder konnten nicht geladen werden.'
+			}
+		},
 		async loadRepositories() {
 			this.repositoryError = ''
 			try {
@@ -308,6 +325,7 @@ export default {
 					direction: m.direction,
 					fieldConfig: m.fieldConfig,
 					githubRepository: m.githubRepository || '',
+					dateFieldId: m.dateFieldId || '',
 				})
 				Object.assign(m, data)
 			} catch (e) {

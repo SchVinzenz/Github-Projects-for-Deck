@@ -56,7 +56,7 @@ class DeckService {
 	public function getBoards(string $userId): array {
 		$boardService = $this->boardService($userId);
 		$out = [];
-		foreach ($boardService->findAll() as $b) {
+		foreach ($boardService->findAll(-1, false, false) as $b) {
 			$out[] = ['id' => $b->getId(), 'title' => $b->getTitle()];
 		}
 		return $out;
@@ -66,7 +66,7 @@ class DeckService {
 	public function getStacks(string $userId, int $boardId): array {
 		$boardService = $this->boardService($userId);
 		$boardService->find($boardId);
-		$stackService = Server::get('OCA\Deck\Service\StackService');
+		$stackService = Server::get('OCA\Deck\Db\StackMapper');
 		$out = [];
 		foreach ($stackService->findAll($boardId) as $s) {
 			$out[] = ['id' => $s->getId(), 'title' => $s->getTitle()];
@@ -84,24 +84,48 @@ class DeckService {
 	public function getCards(string $userId, int $boardId): array {
 		$boardService = $this->boardService($userId);
 		$board = $boardService->find($boardId);
-		$stackService = Server::get('OCA\Deck\Service\StackService');
-		$cardService = Server::get('OCA\Deck\Service\CardService');
+		$stackService = Server::get('OCA\Deck\Db\StackMapper');
 		$cardMapper = Server::get('OCA\Deck\Db\CardMapper');
+		$labelMapper = Server::get('OCA\Deck\Db\LabelMapper');
+		$assignmentMapper = Server::get('OCA\Deck\Db\AssignmentMapper');
 		$out = [];
-		foreach ($stackService->findAll($board->getId()) as $stack) {
-			foreach ($cardMapper->findAll($stack->getId()) as $c) {
-				$details = $cardService->find($c->getId());
+		$stacks = $stackService->findAll($board->getId());
+		$stackById = [];
+		foreach ($stacks as $stack) {
+			$stackById[$stack->getId()] = $stack->getTitle();
+		}
+		if ($stackById === []) {
+			return [];
+		}
+		foreach (array_chunk(array_keys($stackById), 100) as $stackIds) {
+			$byStack = $cardMapper->findAllForStacks($stackIds);
+			$cards = array_merge(...array_values(array_filter($byStack)));
+			if ($cards === []) {
+				continue;
+			}
+			$cardIds = array_map(static fn ($c): int => $c->getId(), $cards);
+			$labels = [];
+			$assignees = [];
+			foreach (array_chunk($cardIds, 500) as $ids) {
+				foreach ($labelMapper->findAssignedLabelsForCards($ids) as $label) {
+					$labels[$label->getCardId()][] = $label->getTitle();
+				}
+				foreach ($assignmentMapper->findIn($ids) as $assignment) {
+					$assignees[$assignment->getCardId()][] = $assignment->getParticipant();
+				}
+			}
+			foreach ($cards as $details) {
 				$out[] = [
 					'id' => $details->getId(),
-					'stackId' => $stack->getId(),
-					'stackTitle' => $stack->getTitle(),
+					'stackId' => $details->getStackId(),
+					'stackTitle' => $stackById[$details->getStackId()],
 					'title' => $details->getTitle(),
 					'description' => $details->getDescription() ?? '',
 					'duedate' => $this->dateOrNull($details->getDuedate()),
 					'startdate' => $this->dateOrNull($details->getStartdate()),
 					'done' => $details->getDone() !== null,
-					'labels' => $this->labelTitles($details->getLabels() ?? []),
-					'assignedUsers' => $this->assigneeUids($details->getAssignedUsers() ?? []),
+					'labels' => $labels[$details->getId()] ?? [],
+					'assignedUsers' => $assignees[$details->getId()] ?? [],
 					'lastModified' => $details->getLastModified(),
 				];
 			}

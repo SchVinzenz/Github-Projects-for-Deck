@@ -24,7 +24,7 @@ Nextcloud Deck und GitHub Projects v2.
   Schema-Anpassungen) laufen best-effort mit Warnungen statt Abbrüchen;
   GraphQL-Fehler brechen laut ab statt still leer zu liefern; destruktive
   Aktionen nur per explizitem Webhook-Event, nie per Listen-Abwesenheit
-- **Tests & Doku**: 27 Unit-Tests, Docs unter `docs/`
+- **Tests & Doku**: 30 Unit-Tests, Docs unter `docs/`
 
 ## Mapping
 
@@ -35,12 +35,12 @@ Nextcloud Deck und GitHub Projects v2.
 | Label | Issue-Label (REST, fehlende werden angelegt) | ✅ |
 | Assignee | via User-Mapping-Tabelle | ✅ (ohne Mapping wird übersprungen) |
 | Kommentar | Issue-Comment (`[Deck]`/`[GitHub user]`) | ✅ |
-| Fälligkeit | Datumsfeld (auto-erkannt, Default: einziges DATE-Feld) | ✅ |
+| Fälligkeit | Datumsfeld (auto-erkannt oder pro Mapping auswählbar) | ✅ |
 | Startdatum | separates Datumsfeld (`Start date` wird ggf. angelegt) | ✅ |
 | Erledigt | Issue open/closed | ✅ |
 | Archiv/Delete | nur per Webhook-Event (`deleted`/`archived`/`restored`) | ✅ |
 | PR | read-only Card | ✅ |
-| Anhang | — | TODO |
+| Anhang | — | Nicht unterstützt: private Nextcloud-Dateien sind für GitHub nicht abrufbar; Anhänge bleiben in Deck. |
 
 ## Setup
 

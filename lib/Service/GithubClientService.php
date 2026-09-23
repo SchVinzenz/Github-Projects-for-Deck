@@ -238,6 +238,9 @@ class GithubClientService {
 			try {
 				return $this->getUserAccessToken($userId);
 			} catch (\Throwable $e) {
+				if ($e instanceof GithubRateLimitException) {
+					throw $e;
+				}
 				$this->logger->warning('deckgithubsync: user token refresh failed; trying installation token', ['exceptionType' => get_class($e)]);
 				if ($this->getInstallationId($userId) === '') {
 					throw $e;
@@ -264,14 +267,19 @@ class GithubClientService {
 			$options['body'] = json_encode($payload);
 		}
 		$url = self::API_BASE . $path;
-		$resp = match (strtoupper($method)) {
+		try {
+			$resp = match (strtoupper($method)) {
 			'GET' => $client->get($url, $options),
 			'POST' => $client->post($url, $options),
 			'PATCH' => $client->patch($url, $options),
 			'PUT' => $client->put($url, $options),
 			'DELETE' => $client->delete($url, $options),
 			default => throw new \InvalidArgumentException('Unsupported method ' . $method),
-		};
+			};
+		} catch (\Throwable $e) {
+			$this->throwIfRateLimited($e);
+			throw $e;
+		}
 		$decoded = json_decode($resp->getBody(), true);
 		return is_array($decoded) ? $decoded : [];
 	}
@@ -283,7 +291,8 @@ class GithubClientService {
 		if ($asUser && $userToken === '') {
 			throw new \RuntimeException('Connect a GitHub user account to list projects');
 		}
-		$resp = $client->post(self::GRAPHQL_URL, [
+		try {
+			$resp = $client->post(self::GRAPHQL_URL, [
 			'headers' => [
 				'Authorization' => 'Bearer ' . ($asUser ? $userToken : $this->resolveToken($userId)),
 				'Content-Type' => 'application/json',
@@ -291,15 +300,52 @@ class GithubClientService {
 			],
 			'body' => json_encode(['query' => $query, 'variables' => $variables]),
 			'timeout' => 20,
-		]);
+			]);
+		} catch (\Throwable $e) {
+			$this->throwIfRateLimited($e);
+			throw $e;
+		}
 		$decoded = json_decode($resp->getBody(), true);
 		if (!is_array($decoded)) {
 			throw new \RuntimeException('Invalid GraphQL response');
 		}
 		if (!empty($decoded['errors'])) {
+			foreach ($decoded['errors'] as $error) {
+				if (($error['type'] ?? $error['extensions']['code'] ?? '') === 'RATE_LIMITED') {
+					throw new GithubRateLimitException($this->retryAt($resp));
+				}
+			}
 			$this->logger->warning('deckgithubsync GraphQL errors', ['errors' => $decoded['errors']]);
 			throw new \RuntimeException('GitHub GraphQL request failed: ' . substr((string)json_encode($decoded['errors']), 0, 300));
 		}
 		return $decoded;
+	}
+
+	private function throwIfRateLimited(\Throwable $e): void {
+		if (!method_exists($e, 'getResponse') || ($response = $e->getResponse()) === null) {
+			return;
+		}
+		$status = $response->getStatusCode();
+		if ($status !== 429 && $status !== 403) {
+			return;
+		}
+		$body = strtolower((string)$response->getBody());
+		$remaining = (string)$response->getHeader('X-RateLimit-Remaining');
+		if ($status === 429 || $remaining === '0' || str_contains($body, 'rate limit')) {
+			throw new GithubRateLimitException($this->retryAt($response));
+		}
+	}
+
+	private function retryAt(mixed $response): int {
+		$now = time();
+		$retryAfter = (string)$response->getHeader('Retry-After');
+		if (ctype_digit($retryAfter)) {
+			return $now + max(60, min(86400, (int)$retryAfter));
+		}
+		if ($retryAfter !== '' && ($parsed = strtotime($retryAfter)) !== false) {
+			return max($now + 60, min($now + 86400, $parsed));
+		}
+		$reset = (string)$response->getHeader('X-RateLimit-Reset');
+		return ctype_digit($reset) ? max($now + 60, min($now + 86400, (int)$reset)) : $now + 300;
 	}
 }

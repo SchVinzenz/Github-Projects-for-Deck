@@ -53,4 +53,12 @@ class ItemMapMapper extends QBMapper {
 			return null;
 		}
 	}
+
+	/** @return ItemMap[] Links for an Issue node across all mapped projects. */
+	public function findByGithubContent(string $contentId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->eq('github_content_id', $qb->createNamedParameter($contentId)));
+		return $this->findEntities($qb);
+	}
 }

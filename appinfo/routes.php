@@ -12,6 +12,7 @@ return [
 		['name' => 'settings#getAdmin', 'url' => '/api/v1/admin', 'verb' => 'GET'],
 		['name' => 'settings#setAdmin', 'url' => '/api/v1/admin', 'verb' => 'PUT'],
 		['name' => 'settings#listMappings', 'url' => '/api/v1/mappings', 'verb' => 'GET'],
+		['name' => 'settings#mappingDateFields', 'url' => '/api/v1/mappings/{id}/date-fields', 'verb' => 'GET'],
 		['name' => 'settings#createMapping', 'url' => '/api/v1/mappings', 'verb' => 'POST'],
 		['name' => 'settings#updateMapping', 'url' => '/api/v1/mappings/{id}', 'verb' => 'PUT'],
 		['name' => 'settings#deleteMapping', 'url' => '/api/v1/mappings/{id}', 'verb' => 'DELETE'],
