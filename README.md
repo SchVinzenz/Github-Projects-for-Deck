@@ -7,6 +7,7 @@ Test a new mapping with disposable boards before using it for important work.
 ## Preview
 
 The screenshots use a sample product-launch board in a local Nextcloud installation. They show the Deck data model and the app's setup screen; they do not represent a completed GitHub sync.
+You can import the [sample board export](docs/demo-board.json) through Deck's **Import board** action.
 
 | Demo board | Card details |
 | --- | --- |
