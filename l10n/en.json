@@ -1,5 +1,7 @@
 {
   "translations": {
+    "Synchronization is already running. Check the result shortly.": "Synchronization is already running. Check the result shortly.",
+    "Synchronization failed. Check the Nextcloud server log.": "Synchronization failed. Check the Nextcloud server log.",
     "Deck and GitHub Sync": "Deck and GitHub Sync",
     "Connect GitHub": "Connect GitHub",
     "Connect your personal GitHub account to sync projects.": "Connect your personal GitHub account to sync projects.",

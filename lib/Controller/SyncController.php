@@ -15,6 +15,8 @@ use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\Http;
 use OCP\IRequest;
+use OCP\Lock\LockedException;
+use Psr\Log\LoggerInterface;
 
 class SyncController extends Controller {
 	public function __construct(
@@ -22,6 +24,7 @@ class SyncController extends Controller {
 		IRequest $request,
 		private SyncService $sync,
 		private ?string $userId,
+		private LoggerInterface $logger,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -33,8 +36,14 @@ class SyncController extends Controller {
 		} catch (\Exception) {
 			return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
 		}
-		$stats = $this->sync->syncBoard($map);
-		return new DataResponse($stats);
+		try {
+			return new DataResponse($this->sync->syncBoard($map));
+		} catch (LockedException) {
+			return new DataResponse(['busy' => true], Http::STATUS_ACCEPTED);
+		} catch (\Throwable $e) {
+			$this->logger->error('deckgithubsync manual sync failed', ['map' => $id, 'exception' => $e]);
+			return new DataResponse(['error' => 'Synchronization failed. Check the Nextcloud server log.'], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
 	}
 
 	#[NoAdminRequired]

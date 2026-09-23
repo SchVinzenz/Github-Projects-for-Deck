@@ -366,8 +366,14 @@ export default {
 		},
 		async sync(m) {
 			this.syncing[m.id] = true
+			this.error = ''
+			this.notice = ''
 			try {
 				const { data } = await axios.post(apiUrl(`/api/v1/sync/${m.id}`))
+				if (data.busy) {
+					this.notice = tr('Synchronization is already running. Check the result shortly.')
+					return
+				}
 				const errs = (data.errors || []).length
 				const warns = (data.warnings || []).length
 				this.results[m.id] = tr('Deck→GitHub: {toGithub}, GitHub→Deck: {toDeck}', { toGithub: data.deck_to_github, toDeck: data.github_to_deck })
@@ -385,7 +391,7 @@ export default {
 					this.notice = data.warnings.join('; ')
 				}
 			} catch (e) {
-				this.error = tr('Sync failed.')
+				this.error = e.response?.data?.error ? tr(e.response.data.error) : tr('Sync failed.')
 			} finally {
 				this.syncing[m.id] = false
 			}
