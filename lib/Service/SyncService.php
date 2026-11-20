@@ -577,7 +577,8 @@ class SyncService {
 	}
 
 	private function commentHash(int $cardId): string {
-		return 'comments:' . hash('sha256', json_encode($this->deck->getComments($cardId)) ?: '[]');
+		// sync_hash is varchar(64): 'comments:' (9) + 54 hex chars = 63. The full sha256 (64) overflowed it.
+		return 'comments:' . substr(hash('sha256', json_encode($this->deck->getComments($cardId)) ?: '[]'), 0, 54);
 	}
 
 	private function saveCommentHashes(array $links, array $deckCards, array $fieldMap, bool $allowToGithub): void {
