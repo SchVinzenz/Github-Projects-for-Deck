@@ -19,7 +19,7 @@ use Psr\Log\LoggerInterface;
  * Access Deck via internal services when installed, otherwise throw.
  *
  * Targets Deck 2.x (BoardService::find($boardId), StackService::findAll($boardId),
- * CardService::find($cardId), LabelMapper::findAll($boardId)). The Deck user
+ * CardMapper::find($cardId), LabelMapper::findAll($boardId)). The Deck user
  * context is set via BoardService::setUserId(), which propagates to the shared
  * PermissionService. Full card payloads are sent on update() because Deck
  * clears omitted fields.
@@ -50,6 +50,16 @@ class DeckService {
 			$boardService->setUserId($userId);
 		}
 		return $boardService;
+	}
+
+	/**
+	 * Load a card without attachments. CardService::find() always enriches
+	 * attachments via FilesAppService, whose user id is injected at construction
+	 * and is null in cron/background jobs (TypeError in DeckShareProvider).
+	 * CardMapper::find() already includes labels; the sync needs no attachments.
+	 */
+	private function findCard(int $cardId): mixed {
+		return Server::get('OCA\Deck\Db\CardMapper')->find($cardId);
 	}
 
 	/** @return array<int, array{id:int,title:string}> */
@@ -144,7 +154,7 @@ class DeckService {
 	public function updateCard(string $userId, int $cardId, array $patch): void {
 		$this->boardService($userId);
 		$cardService = Server::get('OCA\Deck\Service\CardService');
-		$current = $cardService->find($cardId);
+		$current = $this->findCard($cardId);
 		$cardService->update(
 			$cardId,
 			$patch['title'] ?? $current->getTitle(),
@@ -164,7 +174,7 @@ class DeckService {
 	public function setDone(string $userId, int $cardId, bool $done): void {
 		$this->boardService($userId);
 		$service = Server::get('OCA\Deck\Service\CardService');
-		$current = $service->find($cardId)->getDone() !== null;
+		$current = $this->findCard($cardId)->getDone() !== null;
 		if ($current !== $done) {
 			$done ? $service->done($cardId) : $service->undone($cardId);
 		}
@@ -173,7 +183,7 @@ class DeckService {
 	public function moveCard(string $userId, int $cardId, int $targetStackId): void {
 		$this->boardService($userId);
 		$cardService = Server::get('OCA\Deck\Service\CardService');
-		$current = $cardService->find($cardId);
+		$current = $this->findCard($cardId);
 		$this->updateCard($userId, $cardId, [
 			'stackId' => $targetStackId,
 			'title' => $current->getTitle(),
@@ -215,7 +225,7 @@ class DeckService {
 			$cardService = Server::get('OCA\Deck\Service\CardService');
 			$wanted = array_fill_keys(array_map('mb_strtolower', $titles), true);
 			if ($replace) {
-				foreach ($cardService->find($cardId)->getLabels() ?? [] as $current) {
+				foreach ($this->findCard($cardId)->getLabels() ?? [] as $current) {
 					if (!isset($wanted[mb_strtolower($current->getTitle())])) {
 						$cardService->removeLabel($cardId, $current->getId());
 					}
@@ -251,7 +261,8 @@ class DeckService {
 			$wanted = array_fill_keys($deckUserIds, true);
 			$managed = array_fill_keys($managedUserIds, true);
 			$current = [];
-			foreach ($cardService->find($cardId)->getAssignedUsers() ?? [] as $assignment) {
+			$assignmentMapper = Server::get('OCA\Deck\Db\AssignmentMapper');
+			foreach ($assignmentMapper->findAll($cardId) as $assignment) {
 				$uid = is_array($assignment) ? ($assignment['participant'] ?? '') : $assignment->getParticipant();
 				if ($uid === '') {
 					continue;
